@@ -389,7 +389,7 @@
 - MVPでは以下6種で固定（追加はv1以降）
 - `UNDERSTATED_RISK` 発火:
 - `score = 0.5*clamp(diff_risk,0,40) + 12*risk_fail_count + 0.2*damage`
-- `score >= 40` で付与
+- `diff_risk >= 8` かつ `score >= 40` で付与
 - `INFO_GAP` 発火:
 - `score = 0.6*uncertainty + 10*prog_fail_count + 4*setback_token`
 - `score >= 62` で付与
@@ -404,7 +404,7 @@
 - `score >= 40` で付与
 - `HONOR_MISREAD` 発火:
 - `score = 0.8*max(0,-diff_honor) + 0.5*max(0,55-honor_outlook) + 0.2*public_visibility`
-- `score >= 38` で付与
+- `diff_honor <= -8` かつ `score >= 38` で付与
 - 失敗理由の重大度（MVP初期）:
 - `UNDERSTATED_RISK = 95`
 - `BAD_MATCH = 88`
@@ -449,7 +449,10 @@
 - `cause_bonus = 8*I(UNDERSTATED_RISK) + 6*I(BAD_MATCH) + 5*I(FATIGUE_OVERLOAD) + 4*I(INFO_GAP) + 4*I(BAD_LUCK) + 3*I(HONOR_MISREAD)`
 - `I(tag)` はタグ成立時 `1`、未成立時 `0`
 - `band_base = 0 / 0 / 2 / 8 / 16`（無傷/軽傷/重傷/深刻/致命的）
-- `p_leave = clamp(band_base + 0.65*max(0,damage-70) + 0.35*stress_token + cause_bonus - 0.25*trust_guild + rand(-4,4), 2, 60)%`
+- `p_leave_raw = clamp(band_base + 0.65*max(0,damage-70) + 0.35*stress_token + cause_bonus - 0.25*trust_guild + rand(-4,4), 0, 60)%`
+- `leave_days == 0` の場合 `p_leave = 0`
+- `damage < 50` の場合 `p_leave = clamp(p_leave_raw, 0, 20)%`
+- それ以外は `p_leave = clamp(p_leave_raw, 2, 60)%`
 
 11. 露見因果スコアK（再掲・実装式）
 - `info_hide_degree = clamp(abs(actual_difficulty - disclosed_difficulty)*1.2, 0, 100)`
