@@ -108,7 +108,7 @@
 - 結果4分類の判定は「目的達成度 x 被害度」の2軸で行う
 - 長期離脱者への見舞いは、主に冒険者側の心象へ反映する
 - 依頼終了理由の代表パターンは「期限切れ / 他ギルド達成 / 依頼主都合」
-- AI失敗時フォールバックはMVP対象外（AI前提）
+- AI失敗時は固定テンプレへ置換せず、直近キャッシュ暫定表示 + 再試行キューで復旧する
 - 面談の長さはギルド側で固定せず、冒険者側の打ち切りで終わる
 - 冒険者応募は日次で発生する
 
@@ -148,6 +148,44 @@
 - `ギルドへの信頼`
 - `倫理観との一致`
 - `過去実績との適合`
+- `任務スタイル適合度`（地味/派手嗜好の一致度）
+- `名誉見通し適合度`（名誉期待と不名誉リスクの適合度）
+- 追加要素値の算出（MVP初期式）:
+- `style_pref = clamp(50 + 20o + 15e - 10c, 0, 100)`
+- `style_signal = clamp(request_style_level_disclosed + hearing_delta_style, 0, 100)`
+- `style_fit = clamp(100 - abs(style_pref - style_signal), 0, 100)`
+- `honor_pref = clamp(50 + 20e + 20a + 10c + 10n, 0, 100)`
+- `expected_honor_signal = clamp(expected_honor_disclosed + hearing_delta_honor, 0, 100)`
+- `dishonor_signal = clamp(dishonor_risk_disclosed + hearing_delta_dishonor, 0, 100)`
+- `visibility_signal = clamp(public_visibility_disclosed + hearing_delta_visibility, 0, 100)`
+- `mission_honor_profile = clamp(50 + 0.7*expected_honor_signal - 0.9*dishonor_signal + 0.3*visibility_signal, 0, 100)`
+- `honor_outlook = clamp(100 - abs(honor_pref - mission_honor_profile), 0, 100)`
+- 依頼メタ4値の生成（確定）:
+- `request_style_level`, `expected_honor`, `dishonor_risk`, `public_visibility` は依頼カテゴリ基準値 + 案件揺らぎで生成する
+- `value = clamp(category_base + rand(-jitter, +jitter), 0, 100)`
+- MVP初期値はカテゴリ別テーブルで管理し、後でバランス調整可能にする
+- MVP依頼カテゴリ（固定）:
+- `討伐`
+- `護衛`
+- `調査`
+- `採取`
+- `運搬`
+- `交渉（仲裁/説得）`
+- カテゴリ基準テーブル（実値ベース・MVP初期）:
+
+| 依頼カテゴリ | request_style_level | expected_honor | dishonor_risk | public_visibility | jitter |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 討伐 | 75 | 68 | 46 | 72 | 12 |
+| 護衛 | 50 | 56 | 34 | 60 | 10 |
+| 調査 | 40 | 44 | 30 | 32 | 12 |
+| 採取 | 30 | 36 | 18 | 22 | 10 |
+| 運搬 | 25 | 34 | 26 | 38 | 10 |
+| 交渉（仲裁/説得） | 55 | 66 | 52 | 76 | 14 |
+
+- 実値生成式（確定）:
+- `actual_value = clamp(base_value + rand(-jitter, +jitter), 0, 100)`
+- 同一依頼内では4値を固定し、日次で再抽選しない
+- 受諾判定は `actual_value` ではなく `disclosed_value + hearing_delta` の観測値で行う
 - 生重み（MVP初期係数）:
 - `w_reward_raw = 1.00 + 0.35e - 0.20a - 0.15c`
 - `w_riskfit_raw = 1.00 + 0.40o + 0.30e - 0.45n`
@@ -157,15 +195,49 @@
 - `w_guild_raw = 1.00 + 0.35a + 0.25c - 0.20n`
 - `w_ethics_raw = 1.00 + 0.55a + 0.20c - 0.15e`
 - `w_record_raw = 1.00 + 0.50c - 0.20o + 0.15n`
+- `w_style_raw = 1.00 + 0.35o + 0.30e - 0.25c - 0.20a`
+- `w_honor_raw = 1.00 + 0.30e + 0.30a + 0.20c + 0.15n`
 - 各生重みは `0.20〜3.00` にクランプ後、合計100に正規化
 - 基本スコア:
 - `S_base = Σ(重み_i × 要素値_i) / 100`
-- `S = clamp(S_base + 説得補正合計, 0, 100)`
+- `S` は `S_base` に説得補正を加算して求める
 - 説得補正（MVP初期係数）:
-- `おだてる = clamp(2 + 3e - 2c - 1n, -8, +8)`
-- `応援する = clamp(2 + 2a + 1c - 2n, -6, +8)`
-- `たきつける = clamp(1 + 3o + 2e - 3c - 2a, -10, +10)`
-- 説得補正合計は `-12〜+12` にクランプ
+- 性格ベース補正:
+- `base_delta(おだてる) = clamp(2 + 3e - 2c - 1n, -8, +8)`
+- `base_delta(応援する) = clamp(2 + 2a + 1c - 2n, -6, +8)`
+- `base_delta(たきつける) = clamp(1 + 3o + 2e - 3c - 2a, -10, +10)`
+- 不満要因重み（行動 × blocking_factor 係数）:
+
+| blocking_factor | おだてる | 応援する | たきつける |
+| --- | ---: | ---: | ---: |
+| `risk_fit` | `-1.0` | `+2.0` | `-2.0` |
+| `clarity` | `-0.5` | `+1.2` | `-1.2` |
+| `client_trust` | `-1.2` | `+1.8` | `-1.5` |
+| `reward_balance` | `+1.4` | `+0.6` | `+1.0` |
+| `fatigue` | `-0.8` | `+2.2` | `-2.4` |
+| `ethics` | `-1.0` | `+1.0` | `-2.2` |
+| `style_fit` | `+0.8` | `+0.4` | `+2.3` |
+| `honor_outlook` | `+2.0` | `+0.8` | `+1.8` |
+
+- 追い風要因重み（行動 × positive_factor 係数）:
+
+| positive_factor | おだてる | 応援する | たきつける |
+| --- | ---: | ---: | ---: |
+| `reward` | `+1.2` | `+0.4` | `+0.8` |
+| `guild_trust` | `+0.6` | `+1.0` | `+0.2` |
+| `record_fit` | `+0.3` | `+0.8` | `+0.4` |
+| `style_fit` | `+0.5` | `+0.2` | `+1.0` |
+| `honor_outlook` | `+0.9` | `+0.3` | `+0.8` |
+
+- 説得補正式（確定）:
+- `sev_block = clamp((-gap) / 20, 0, 1.5)`（`gap` は負値ほど不満が強い）
+- `sev_pos = clamp(gap / 20, 0, 1.0)`（`gap` は正値ほど追い風が強い）
+- `factor_delta = Σ_top2( coef_block[action,f] * sev_block[f] ) + Σ_top1( coef_pos[action,p] * sev_pos[p] )`
+- `repeat_penalty = 0 / -2 / -5`（同一行動の連続回数 `1 / 2 / 3回以上`）
+- `persuasion_delta = clamp(base_delta(action) + factor_delta + repeat_penalty, -12, +12)`
+- `S = clamp(S_base + persuasion_delta, 0, 100)`
+- 1面談で説得行動を複数回行った場合:
+- 直近2回の `persuasion_delta` を重み `1.0, 0.6` で合算し、面談全体で `-12〜+12` に再クランプ
 - 判定閾値（基準値）:
 - 個体閾値補正 `theta_accept`（`-10〜+10`）を適用
 - `S >= 70 + theta_accept`: 受諾
@@ -225,10 +297,17 @@
 - `失敗`: 達成度 < 50 かつ 被害度 < 70
 - `惨敗`: 被害度 >= 70 または（達成度 < 30 かつ 被害度 >= 50）
 
-#### ミッション結果算出ロジック（v0.1）
+#### ミッション自動展開ロジック（v0.3 / 主採用）
 
-- 目的: 出発後非介入でも「納得感のある成否と被害」を返す
-- 方針: 初期は甘め（理不尽死を抑え、判断学習を優先）
+- 目的: 単発確率ではなく、内部のオート展開（TRPG風シーン進行）で結果と理由を確定する
+- 方針:
+- 出発後の操作は不可
+- ただし内部では「複数シーン + 乱数ロール + 能力差」で展開を進める
+- 成否と同時に `failure_causes`（失敗理由タグ）を必ず生成する
+- v0.3チューニング適用:
+- 失敗理由タグ発火を閾値スコア方式へ更新
+- `achievement/damage` 係数を再調整
+- 負傷・離脱・退団を段階化して重み再調整
 
 1. 入力値（内部）
 - 依頼側:
@@ -236,52 +315,356 @@
 - `hazard`（環境危険度 0-100）
 - `uncertainty`（情報不確実性 0-100）
 - `distance`（移動負荷 0-100）
+- `disclosed_*` と `actual_*` の差分（説明食い違い判定用）
 - 冒険者側:
 - `party_fit`（案件適合 0-100）
 - `fatigue_avg`（平均疲労 0-100）
 - `morale`（士気 0-100）
 - `trust_guild`（ギルド信頼 0-100）
 - `prep_bonus`（出発前助言効果 0-20）
-- 乱数:
-- `r1`, `r2`（各 `-6〜+6`）
+- `style_fit`, `honor_outlook`（面談由来の適合）
 
-2. 有効戦力と危険圧の算出
-- `power = 0.50*party_fit + 0.15*morale + 0.15*trust_guild + 0.20*prep_bonus`
-- `risk = 0.55*actual_difficulty + 0.25*hazard + 0.20*uncertainty`
-- `fatigue_penalty = 0.35*fatigue_avg`
+2. パーティ派生値
+- `power = clamp(0.48*party_fit + 0.16*morale + 0.14*trust_guild + 0.14*prep_bonus + 0.08*style_fit, 0, 100)`
+- `guard = clamp(0.42*party_fit + 0.20*prep_bonus + 0.18*morale + 0.12*trust_guild - 0.22*fatigue_avg, 0, 100)`
+- `focus = clamp(0.45*party_fit + 0.20*honor_outlook + 0.20*morale - 0.15*uncertainty, 0, 100)`
 
-3. 達成度 / 被害度の算出
-- `achievement = clamp(58 + 0.85*(power - risk) - 0.20*fatigue_penalty + r1, 0, 100)`
-- `damage = clamp(24 + 0.75*(risk - power) + 0.30*hazard + 0.30*fatigue_penalty - 0.15*prep_bonus + r2, 0, 100)`
+3. シーン生成（内部）
+- 固定シーン:
+- `travel`（移動）
+- `approach`（接触・探索）
+- `objective`（本目的）
+- `return`（撤収）
+- 追加シーン:
+- `incident` を `0〜2` 個追加（`hazard` と `uncertainty` が高いほど発生）
+- `incident_count = floor((hazard + uncertainty) / 120) + rand(0,1)` を `0〜2` にクランプ
+- `scene_count = 4 + incident_count`
 
-4. 帰還日（同日帰還あり）
-- `duration_days = clamp(round(0.02*distance + 0.02*actual_difficulty - 0.03*prep_bonus + rand(-1,1)), 0, 6)`
+4. シーン解決（TRPG風ロール）
+- 各シーンで `進捗ロール` と `危機ロール` を実行
+- ロールは `d100`
+- シーン難易度:
+- `tn_prog(scene) = clamp(actual_difficulty + prog_mod(scene) + rand(-6, +6), 20, 95)`
+- `tn_risk(scene) = clamp(0.65*hazard + 0.35*uncertainty + risk_mod(scene) + rand(-6, +6), 15, 98)`
+- `prog_mod / risk_mod`（MVP初期）:
+- `travel: +4 / +10`
+- `approach: +0 / +6`
+- `objective: +12 / +12`
+- `return: -6 / +8`
+- `incident: +8 / +10`（追加シーン）
+- 成功率（進捗）:
+- `p_prog = clamp(50 + (power - tn_prog), 5, 95)`
+- 成功率（危機回避）:
+- `p_safe = clamp(50 + (guard - tn_risk), 5, 95)`
+- 判定:
+- `roll_prog <= p_prog` で進捗成功
+- `roll_safe <= p_safe` で危機回避成功
+- クリティカル閾値（固定）:
+- `roll <= 5`: クリティカル成功（追加効果）
+- `roll >= 96`: ファンブル（合併症付与）
+
+5. トークン集計
+- `progress_token`:
+- 進捗成功 `+1`
+- 進捗クリティカル `+2`
+- 進捗ファンブル `0` + `setback_token +1`
+- `damage_token`:
+- 危機回避失敗 `+1`
+- 危機ファンブル `+2`
+- 危機クリティカル成功は `damage_token -1`（下限0）
+- `stress_token`:
+- 危機失敗時 `+1`、`uncertainty > 60` なら追加 `+1`
+- カウンタ（v0.3）:
+- `prog_fail_count`（進捗失敗回数）
+- `risk_fail_count`（危機回避失敗回数）
+- `critical_count`（クリティカル総数）
+- `fumble_count`（ファンブル総数）
+
+6. 食い違い・失敗理由の確定（v0.3）
+- 依頼情報差分:
+- `diff_risk = actual_hazard - disclosed_hazard`
+- `diff_difficulty = actual_difficulty - disclosed_difficulty`
+- `diff_honor = actual_expected_honor - disclosed_expected_honor`
+- 理由タグ（複数可）:
+- MVPでは以下6種で固定（追加はv1以降）
+- `UNDERSTATED_RISK` 発火:
+- `score = 0.5*clamp(diff_risk,0,40) + 12*risk_fail_count + 0.2*damage`
+- `score >= 40` で付与
+- `INFO_GAP` 発火:
+- `score = 0.6*uncertainty + 10*prog_fail_count + 4*setback_token`
+- `score >= 62` で付与
+- `BAD_MATCH` 発火:
+- `score = 0.7*max(0,50-party_fit) + 8*max(0,ceil(scene_count*0.5)-progress_token) + 0.2*max(0,50-focus)`
+- `score >= 35` で付与
+- `FATIGUE_OVERLOAD` 発火:
+- `score = 0.7*max(0,fatigue_avg-50) + 9*stress_token + 5*risk_fail_count`
+- `score >= 42` で付与
+- `BAD_LUCK` 発火:
+- `score = 22*fumble_count - 6*critical_count`
+- `score >= 40` で付与
+- `HONOR_MISREAD` 発火:
+- `score = 0.8*max(0,-diff_honor) + 0.5*max(0,55-honor_outlook) + 0.2*public_visibility`
+- `score >= 38` で付与
+- 失敗理由の重大度（MVP初期）:
+- `UNDERSTATED_RISK = 95`
+- `BAD_MATCH = 88`
+- `FATIGUE_OVERLOAD = 82`
+- `INFO_GAP = 74`
+- `HONOR_MISREAD = 62`
+- `BAD_LUCK = 56`
+- 結果画面には `failure_causes` を自然文で全件表示する（上限省略）
+- 表示順は `重大度降順` で固定
+- 同順位の並びは `初回発生シーン順`（早い順）で固定
+- `failure_causes` が0件の場合は原因欄に `特筆すべき問題なし` を1行表示する
+
+7. 達成度 / 被害度の算出（v0.3）
+- 補助値:
+- `objective_success = 1`（objectiveシーン進捗成功時）/ `0`（失敗時）
+- `incident_penalty = 3 * incident_count`
+- `achievement = clamp(18 + 10*progress_token - 5*setback_token + 0.12*focus + 0.08*power + 8*objective_success - 0.08*uncertainty + rand(-5,5), 0, 100)`
+- `damage = clamp(6 + 10*damage_token + 6*stress_token + 0.16*hazard + 0.10*max(0,actual_difficulty-power) - 0.14*prep_bonus - 0.08*guard + incident_penalty + rand(-4,4), 0, 100)`
+- この `achievement/damage` を結果4分類マトリクスへ入力する
+
+8. 帰還日（同日帰還あり）
+- `duration_days = clamp(round(0.55*scene_count + 0.018*distance + 0.012*actual_difficulty - 0.025*prep_bonus + rand(-1,1)), 0, 7)`
 - `0` の場合は同日帰還
 
-5. 報酬支払い率
+9. 報酬支払い率
 - `成功: 100%`
-- `部分成功: 60〜90%`（達成度に比例）
-- `失敗: 10〜30%`（最低成果分）
+- `部分成功: 55〜90%`（`achievement` に比例）
+- `失敗: 5〜30%`（回収物や途中成果に応じる）
 - `惨敗: 0〜10%`
 
-6. 負傷・離脱（初期は甘め）
-- `damage < 35`: 離脱なし
-- `35 <= damage < 55`: 軽傷（離脱 1〜2日）
-- `55 <= damage < 75`: 重傷（離脱 3〜7日）
-- `damage >= 75`: 深刻（離脱 7〜14日 + 退団判定）
-- 退団確率（深刻時）:
-- `p_leave = clamp(8 + 0.9*(damage-75) - 0.2*trust_guild + rand(-5,5), 5, 55)%`
+10. 負傷・離脱・退団（v0.3）
+- `damage < 30`: 離脱なし
+- `30 <= damage < 50`: 軽傷（離脱 1〜3日）
+- `50 <= damage < 70`: 重傷（離脱 3〜8日）
+- `70 <= damage < 85`: 深刻（離脱 8〜16日 + 退団判定）
+- `damage >= 85`: 致命的重傷（離脱 14〜30日 + 強い退団判定）
+- 長期離脱補正:
+- `long_leave_bonus_days = floor(max(0, stress_token-2) / 2) + floor(max(0, damage-70) / 10)`
+- 最終離脱日数:
+- `leave_days = base_leave_days + long_leave_bonus_days`（上限30日）
+- 退団確率:
+- `cause_bonus = 8*I(UNDERSTATED_RISK) + 6*I(BAD_MATCH) + 5*I(FATIGUE_OVERLOAD) + 4*I(INFO_GAP) + 4*I(BAD_LUCK) + 3*I(HONOR_MISREAD)`
+- `I(tag)` はタグ成立時 `1`、未成立時 `0`
+- `band_base = 0 / 0 / 2 / 8 / 16`（無傷/軽傷/重傷/深刻/致命的）
+- `p_leave = clamp(band_base + 0.65*max(0,damage-70) + 0.35*stress_token + cause_bonus - 0.25*trust_guild + rand(-4,4), 2, 60)%`
 
-7. 露見因果スコアK（再掲・実装式）
+11. 露見因果スコアK（再掲・実装式）
 - `info_hide_degree = clamp(abs(actual_difficulty - disclosed_difficulty)*1.2, 0, 100)`
-- `failure_relatedness = clamp(0.6*damage + 0.4*max(0, risk-power), 0, 100)`
+- `failure_relatedness = clamp(0.6*damage + 0.4*max(0, (hazard+uncertainty)/2 - power), 0, 100)`
 - `warning_ignore_degree = clamp(ignored_warning_count*20, 0, 100)`
 - `K = 0.5*info_hide_degree + 0.3*failure_relatedness + 0.2*warning_ignore_degree`
-- `K` により小/中/大ペナルティ帯を判定
 
-8. 日報反映
-- 上記 `achievement`, `damage`, `duration_days`, `reward_rate`, `K` を元に
-- `result_class`、負傷区分、評判変化、個人履歴文を生成する
+12. 日報反映
+- 出力:
+- `result_class`, `achievement`, `damage`, `duration_days`, `reward_rate`
+- `scene_timeline`（内部展開ログ）
+- `scene_highlights`（表示用の重要シーン、最大4件）
+- `failure_causes`（理由タグ）
+- `discrepancy_notes`（申告食い違いメモ）
+- 重要シーン抽出（確定）:
+- `importance_score(scene) = scene_base + roll_event + discrepancy_bonus + cause_link_bonus`
+- `scene_base`: `objective=3`, `incident=2`, `approach=1`, `travel/return=0`
+- `roll_event`: クリティカルまたはファンブル発生で `+2`
+- `discrepancy_bonus`: 申告食い違いに関与したシーンで `+2`
+- `cause_link_bonus`: `failure_causes` の根拠シーンで `+2`
+- 表示は `importance_score` 降順、同点はシーン発生順
+- 表示件数は最大4件（内部ログは全件保持）
+- 各表示行は「事実 + 冒険者感情1フレーズ」で出力する
+- 感情フレーズの強度は中程度（淡々すぎず、過剰演出なし）
+
+13. 実装擬似コード（1ミッション実行）
+
+```ts
+type MissionInput = {
+  requestId: string;
+  day: number;
+  request: {
+    actualDifficulty: number;
+    hazard: number;
+    uncertainty: number;
+    distance: number;
+    disclosedDifficulty: number;
+    disclosedHazard: number;
+    disclosedExpectedHonor: number;
+    actualExpectedHonor: number;
+    publicVisibility: number;
+  };
+  party: {
+    partyFit: number;
+    fatigueAvg: number;
+    morale: number;
+    trustGuild: number;
+    prepBonus: number;
+    styleFit: number;
+    honorOutlook: number;
+  };
+  ignoredWarningCount: number;
+};
+
+type SceneKind = "travel" | "approach" | "objective" | "return" | "incident";
+
+type SceneResult = {
+  kind: SceneKind;
+  progSuccess: boolean;
+  riskSuccess: boolean;
+  progRoll: number;
+  riskRoll: number;
+  progCritical: boolean;
+  riskCritical: boolean;
+  progFumble: boolean;
+  riskFumble: boolean;
+  importanceScore: number;
+  notes: string[];
+};
+
+type MissionOutput = {
+  resultClass: "成功" | "部分成功" | "失敗" | "惨敗";
+  achievement: number;
+  damage: number;
+  durationDays: number;
+  rewardRate: number;
+  leaveDays: number;
+  pLeave: number;
+  failureCauses: string[];
+  discrepancyNotes: string[];
+  sceneTimeline: SceneResult[];
+  sceneHighlights: SceneResult[];
+  causalScoreK: number;
+};
+
+function runMission(input: MissionInput): MissionOutput {
+  const derived = calcDerivedStats(input.party, input.request);
+  const scenes = buildScenes(input.request.hazard, input.request.uncertainty);
+  const timeline: SceneResult[] = [];
+
+  const counters = {
+    progressToken: 0,
+    setbackToken: 0,
+    damageToken: 0,
+    stressToken: 0,
+    progFailCount: 0,
+    riskFailCount: 0,
+    criticalCount: 0,
+    fumbleCount: 0,
+    objectiveSuccess: 0,
+    incidentCount: scenes.filter((s) => s === "incident").length,
+  };
+
+  for (const scene of scenes) {
+    const r = resolveScene(scene, input.request, derived);
+    timeline.push(r);
+
+    if (r.progSuccess) counters.progressToken += r.progCritical ? 2 : 1;
+    else {
+      counters.progFailCount += 1;
+      if (r.progFumble) counters.setbackToken += 1;
+    }
+
+    if (!r.riskSuccess) {
+      counters.riskFailCount += 1;
+      counters.damageToken += r.riskFumble ? 2 : 1;
+      counters.stressToken += input.request.uncertainty > 60 ? 2 : 1;
+    } else if (r.riskCritical) {
+      counters.damageToken = Math.max(0, counters.damageToken - 1);
+    }
+
+    if (r.progCritical || r.riskCritical) counters.criticalCount += 1;
+    if (r.progFumble || r.riskFumble) counters.fumbleCount += 1;
+    if (scene === "objective" && r.progSuccess) counters.objectiveSuccess = 1;
+  }
+
+  const diff = calcDiscrepancies(input.request);
+  const { failureCauses, causeFlags } = computeFailureCauses({
+    ...input,
+    ...derived,
+    ...counters,
+    ...diff,
+  });
+
+  const { achievement, damage } = calcAchievementDamage({
+    ...input,
+    ...derived,
+    ...counters,
+  });
+
+  const resultClass = classifyResult(achievement, damage);
+  const durationDays = calcDurationDays(input.request, counters.incidentCount, input.party.prepBonus);
+  const rewardRate = calcRewardRate(resultClass, achievement);
+  const { leaveDays, pLeave } = calcLeaveOutcome(
+    damage,
+    counters.stressToken,
+    input.party.trustGuild,
+    causeFlags
+  );
+
+  const causalScoreK = calcCausalScoreK({
+    actualDifficulty: input.request.actualDifficulty,
+    disclosedDifficulty: input.request.disclosedDifficulty,
+    damage,
+    power: derived.power,
+    hazard: input.request.hazard,
+    uncertainty: input.request.uncertainty,
+    ignoredWarningCount: input.ignoredWarningCount,
+  });
+
+  const sceneHighlights = selectSceneHighlights(timeline, {
+    maxItems: 4,
+    failureCauses,
+    discrepancies: diff,
+  });
+
+  return {
+    resultClass,
+    achievement,
+    damage,
+    durationDays,
+    rewardRate,
+    leaveDays,
+    pLeave,
+    failureCauses,
+    discrepancyNotes: buildDiscrepancyNotes(diff),
+    sceneTimeline: timeline,
+    sceneHighlights,
+    causalScoreK,
+  };
+}
+
+function resolveScene(scene: SceneKind, req: MissionInput["request"], d: { power: number; guard: number }): SceneResult {
+  const { progMod, riskMod } = sceneMods(scene);
+  const tnProg = clamp(req.actualDifficulty + progMod + randInt(-6, 6), 20, 95);
+  const tnRisk = clamp(0.65 * req.hazard + 0.35 * req.uncertainty + riskMod + randInt(-6, 6), 15, 98);
+  const pProg = clamp(50 + (d.power - tnProg), 5, 95);
+  const pSafe = clamp(50 + (d.guard - tnRisk), 5, 95);
+
+  const progRoll = rollD100();
+  const riskRoll = rollD100();
+
+  const progCritical = progRoll <= 5;
+  const riskCritical = riskRoll <= 5;
+  const progFumble = progRoll >= 96;
+  const riskFumble = riskRoll >= 96;
+
+  const progSuccess = progRoll <= pProg;
+  const riskSuccess = riskRoll <= pSafe;
+
+  return {
+    kind: scene,
+    progSuccess,
+    riskSuccess,
+    progRoll,
+    riskRoll,
+    progCritical,
+    riskCritical,
+    progFumble,
+    riskFumble,
+    importanceScore: 0,
+    notes: [],
+  };
+}
+```
 
 #### 依頼主キャラクターと申告誤差
 
@@ -309,10 +692,27 @@
 - 説明欠落率 `15〜35%`（日次再抽選）
 - 終了理由比率 `期限切れ25 / 他ギルド達成20 / 依頼主都合55`
 - 依頼終了理由（期限切れ/他ギルド達成/依頼主都合）の発生傾向も依頼主タイプで変化させる
+- style/honor系4値の申告誤差（MVP初期）:
+
+| 依頼主タイプ | style誤差 | honor誤差 | dishonor誤差 | visibility誤差 |
+| --- | --- | --- | --- | --- |
+| 誠実型 | `-8〜+8` | `-10〜+8` | `-8〜+8` | `-10〜+10` |
+| 誇張営業型 | `+5〜+20` | `+8〜+22` | `-12〜+5` | `+10〜+25` |
+| 過小申告型 | `-8〜+6` | `-12〜+6` | `-25〜-8` | `-10〜+5` |
+| 気分変動型 | `-20〜+20` | `-20〜+20` | `-20〜+20` | `-25〜+25` |
+
+- 申告値生成式（確定）:
+- `disclosed_value = clamp(actual_value + client_error, 0, 100)`
+- 説明欠落時は該当項目を `unknown` とし、面談/追加ヒアリングで補完可能にする
+- 追加ヒアリング補正（MVP初期）:
+- 初期値 `hearing_delta_* = 0`
+- 1回の関連ヒアリングごとに以下を加算:
+- `hearing_delta += round((actual_value - disclosed_value) * r + rand(-2, +2))`
+- `r`（依頼主タイプ別）: `誠実型 0.30 / 誇張営業型 0.18 / 過小申告型 0.15 / 気分変動型 0.20`
+- `hearing_delta` は `[-25, +25]` にクランプ
 
 #### 冒険者応募（日次発生式）
 
 - 1日あたり応募件数はポアソン分布で生成する
 - `応募件数 ~ Poisson(λ)`
 - `λ = clamp(1.2 + 0.012 × (冒険者側総合評判 - 50) + 0.02 × (公開依頼件数 - 6), 0.2, 4.5)`
-

@@ -29,7 +29,10 @@
 7. `60_pre_implementation.md`
 - 実装前に固定した技術仕様（保存、オートセーブ、乱数、AI契約）
 
-8. `99_changelog.md`
+8. `70_ai_generation_design.md`
+- AI生成の責務分離、イベント設計、入出力契約、品質ガード
+
+9. `99_changelog.md`
 - 変更履歴
 
 ## 編集方針

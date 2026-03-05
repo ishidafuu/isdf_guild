@@ -13,6 +13,7 @@
 - `plan/40_execution_plan.md`: MVP実行提案
 - `plan/50_test_and_debug.md`: テストケース・デバッグ手順
 - `plan/60_pre_implementation.md`: 実装前固定仕様
+- `plan/70_ai_generation_design.md`: AI生成設計（イベント/契約/品質ガード）
 - `plan/99_changelog.md`: 更新履歴
 
 ## 使い方
