@@ -14,8 +14,8 @@
 - `style_fit,honor_outlook,decision_margin,persuasion_headroom`
 - `request_style_actual,request_style_disclosed,expected_honor_actual,expected_honor_disclosed,dishonor_actual,dishonor_disclosed,visibility_actual,visibility_disclosed`
 - `request_style_signal,expected_honor_signal,dishonor_signal,visibility_signal`
-- `S_base`, `persuasion_delta`, `S_final`, `theta_accept`, `decision(受諾/保留/辞退)`, `depart_flag`
-- `selected_action,base_delta,factor_delta,repeat_penalty`
+- `S_base`, `persuasion_delta_turn`, `persuasion_effective`, `S_final`, `theta_accept`, `threshold_accept`, `threshold_hold`, `decision(受諾/保留/辞退)`, `depart_flag`
+- `selected_action,base_delta,factor_delta,repeat_penalty,resistance_penalty,timing_penalty`
 - `load_delta`, `load_total`, `T_stop`, `stop_flag`
 - `scene_count,incident_count,progress_token,setback_token,damage_token,stress_token`
 - `prog_fail_count,risk_fail_count,critical_count,fumble_count,objective_success`
@@ -97,9 +97,9 @@
 11. 説得行動の差分確認
 - 条件: 同一案件で `おだてる/応援/たきつける` を個別実行
 - 期待: 不満要因ごとに有効行動が変わる（係数テーブルの方向性が再現される）
-- 見るログ: `persuasion_delta`, `S_final`, `decision`
+- 見るログ: `persuasion_delta_turn`, `persuasion_effective`, `S_final`, `decision`
 - 合格目安（同一冒険者5名比較）:
-- 行動ごとの `persuasion_delta` に差が出る（最大差 `>= 5`）
+- 行動ごとの `persuasion_delta_turn` に差が出る（最大差 `>= 5`）
 - `risk_fit` 主因時は `応援する` が他2行動以上になりやすい
 - `honor_outlook` 主因時は `おだてる` または `たきつける` が相対優位になりやすい
 
@@ -145,11 +145,11 @@
 
 1. `S_base` 分布を確認（中央値が想定50前後か）
 2. `重みセット` の極端値を確認（`0.20` クランプ貼り付きが多すぎないか）
-3. `persuasion_delta` の平均を確認（常時プラス/マイナスに偏っていないか）
-4. `theta_accept` 分布を確認（補正が閾値を壊していないか）
+3. `persuasion_delta_turn` と `persuasion_effective` の平均を確認（常時プラス/マイナスに偏っていないか）
+4. `theta_accept` と `threshold_accept` 分布を確認（補正が閾値を壊していないか）
 5. 必要調整:
 - まず `説得補正合計クランプ` を `±12 -> ±8` に縮小
-- 次に受諾閾値 `70` を `±5` 範囲で調整
+- 次に受諾閾値の基準値 `70` と動的補正量（負荷/反発/信頼）を `±5` 相当で調整
 
 ### B. 「もういい」が出すぎる / 出なさすぎる
 

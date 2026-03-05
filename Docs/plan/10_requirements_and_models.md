@@ -75,7 +75,7 @@
 
 ### 確定
 
-- `次の日` 押下時の標準順序は「日報確認 -> 日付更新 -> 帰還処理（あれば） -> 新規依頼流入」
+- `次の日` 押下時の標準順序は「日報確認 -> 日付更新 -> 依頼終了解決 -> 出発待ち処理 -> 帰還処理 -> 新規依頼流入」
 - 同時進行案件数の上限は設けない
 - 依頼の放置結果は案件ごとの終了条件に依存する
 - 掲示板に出す/出さないはプレイヤー裁量で決める
@@ -120,6 +120,57 @@
 - 各軸のレンジは `0-100`、中心値は `50`
 - 依頼主側軸: `適切性 / 倫理性 / 収益性`
 - 冒険者側軸: `安全配慮 / 公正配分 / 成長機会`
+
+#### キャラ間心象モデル（v0.8 / 確定）
+
+- 目的:
+- 冒険者同士/冒険者-依頼主の関係を、受諾判断・パーティ提案・会話文へ反映する
+- 「組ませたい相棒」「避けたい犬猿」「燃えるライバル」を自然に発生させる
+
+- 関係エッジ（有向）:
+- `source -> target` ごとに保持（双方向は別レコード）
+- 対象組み合わせ:
+- `adventurer -> adventurer`
+- `adventurer -> client`
+
+- 関係軸（0-100, 初期50）:
+- `affinity`（好意・親近感）
+- `mission_trust`（任務上の信頼）
+- `rivalry`（競争意識）
+- `resentment`（遺恨・不満）
+
+- 派生指標:
+- `pair_synergy = clamp(0.35*affinity + 0.45*mission_trust + 0.20*rivalry - 0.50*resentment, 0, 100)`
+- `pair_tension = clamp(0.55*resentment + 0.35*rivalry - 0.20*affinity, 0, 100)`
+- `client_confidence = clamp(0.65*mission_trust + 0.25*affinity - 0.40*resentment, 0, 100)`
+
+- 関係タグ（表示用）:
+- `相棒候補`: `affinity>=72 && mission_trust>=68 && resentment<=35`
+- `健全ライバル`: `rivalry>=65 && resentment<55`
+- `険悪ライバル`: `rivalry>=70 && resentment>=60`
+- `不信`: `mission_trust<=35 || resentment>=70`
+
+- パーティ提案への反映（冒険者最終判断を維持）:
+- 冒険者Aが候補メンバーBをどう見るか:
+- `mate_score(A->B) = clamp(0.50*mission_trust + 0.25*affinity + 0.15*rivalry - 0.35*resentment, 0, 100)`
+- 候補パーティ全体:
+- `team_synergy = mean(pair_synergy(A<->B))`
+- `team_tension = max(pair_tension(A<->B))`
+- 出発判定の補正（受諾後の `D_day` へ加算）:
+- `team_bonus = clamp(0.20*(team_synergy-50) - 0.18*max(0, team_tension-55), -10, +10)`
+- `D_day = D_day + team_bonus`
+
+- ミッション結果後の関係更新（同パーティのペア）:
+- `成功`: `affinity +4`, `mission_trust +6`, `rivalry +1`, `resentment -3`
+- `部分成功`: `affinity +2`, `mission_trust +2`, `rivalry +1`, `resentment -1`
+- `失敗`: `affinity -3`, `mission_trust -6`, `rivalry +2`, `resentment +4`
+- `惨敗`: `affinity -6`, `mission_trust -10`, `rivalry +3`, `resentment +8`
+- すべて `0-100` にクランプ
+
+- イベント補正（シーン由来）:
+- クリティカル支援がログ上で確認されたペア: `mission_trust +6`, `affinity +3`
+- ファンブル起点で被害拡大が示唆されたペア: `mission_trust -4`, `resentment +6`
+- 情報伏せ露見で因果あり時（冒険者->依頼主）: `mission_trust -8`, `resentment +10`
 
 #### 冒険者性格（BIG5ランダムプロファイル）
 
@@ -229,35 +280,251 @@
 | `style_fit` | `+0.5` | `+0.2` | `+1.0` |
 | `honor_outlook` | `+0.9` | `+0.3` | `+0.8` |
 
-- 説得補正式（確定）:
+- 説得補正式（1往復基礎式）:
 - `sev_block = clamp((-gap) / 20, 0, 1.5)`（`gap` は負値ほど不満が強い）
 - `sev_pos = clamp(gap / 20, 0, 1.0)`（`gap` は正値ほど追い風が強い）
 - `factor_delta = Σ_top2( coef_block[action,f] * sev_block[f] ) + Σ_top1( coef_pos[action,p] * sev_pos[p] )`
 - `repeat_penalty = 0 / -2 / -5`（同一行動の連続回数 `1 / 2 / 3回以上`）
-- `persuasion_delta = clamp(base_delta(action) + factor_delta + repeat_penalty, -12, +12)`
-- `S = clamp(S_base + persuasion_delta, 0, 100)`
+- `resistance_penalty = -round(persuasion_resistance / 18)`（`0〜-5`）
+- `timing_penalty = -2`（`interview_load >= 0.8*T_stop` のとき、それ以外は `0`）
+- `persuasion_delta_turn = clamp(base_delta(action) + factor_delta + repeat_penalty + resistance_penalty + timing_penalty, -12, +12)`
 - 1面談で説得行動を複数回行った場合:
-- 直近2回の `persuasion_delta` を重み `1.0, 0.6` で合算し、面談全体で `-12〜+12` に再クランプ
-- 判定閾値（基準値）:
-- 個体閾値補正 `theta_accept`（`-10〜+10`）を適用
-- `S >= 70 + theta_accept`: 受諾
-- `40 + theta_accept <= S < 70 + theta_accept`: 保留
-- `S < 40 + theta_accept`: 辞退
+- `persuasion_window`（最新2件）に毎往復1件積む（説得でない往復は `0` を積む）
+- `persuasion_effective = clamp(latest + 0.6*prev, -12, +12)`
+- `S = clamp(S_base + persuasion_effective, 0, 100)`
 - 出発する/しないの最終決定は冒険者側が行う（受諾後の見送りあり）
 - 受諾後の出発判定（MVP）:
 - `D = S - 0.6 × 当日疲労増分 + 気分変動`
 - `気分変動` は `-8〜+8`
 - `D >= 65` で出発、未満は見送り
 
+#### 受諾/保留/辞退の閾値判定（最終式 v0.6 / 確定）
+
+- 入力:
+- `S_final`（最新面談往復で再計算済み）
+- `theta_accept`（個体補正 `-10〜+10`）
+- `interview_load`, `T_stop`
+- `persuasion_resistance`, `persuasion_locked`
+- `clarity_now - clarity_base`
+- `guild_trust_now - guild_trust_base`
+- `prev_decision`（直前往復の判定。初回は `null`）
+
+- 補助量:
+- `load_ratio = clamp(interview_load / T_stop, 0, 1.2)`
+- `load_penalty_accept = (load_ratio >= 0.8 ? 4 : load_ratio >= 0.6 ? 2 : 0)`
+- `load_penalty_hold = (load_ratio >= 0.8 ? 2 : load_ratio >= 0.6 ? 1 : 0)`
+- `resist_penalty_accept = floor(persuasion_resistance / 25)`（`0〜4`）
+- `resist_penalty_hold = floor(persuasion_resistance / 40)`（`0〜2`）
+- `lock_penalty_accept = persuasion_locked ? 3 : 0`
+- `lock_penalty_hold = persuasion_locked ? 1 : 0`
+- `info_relief = clamp((clarity_now - clarity_base) / 15, -3, +3)`
+- `trust_relief = clamp((guild_trust_now - guild_trust_base) / 20, -2, +2)`
+
+- 閾値計算:
+- `threshold_accept_raw = 70 + theta_accept + load_penalty_accept + resist_penalty_accept + lock_penalty_accept - info_relief - trust_relief`
+- `threshold_hold_raw = 40 + theta_accept + load_penalty_hold + resist_penalty_hold + lock_penalty_hold - 0.5*info_relief - 0.5*trust_relief`
+- `threshold_accept = clamp(round(threshold_accept_raw), 52, 92)`
+- `threshold_hold = clamp(round(threshold_hold_raw), 25, 78)`
+- ガード:
+- `threshold_hold = min(threshold_hold, threshold_accept - 12)`
+
+- 生判定:
+- `S_final >= threshold_accept`: 受諾
+- `threshold_hold <= S_final < threshold_accept`: 保留
+- `S_final < threshold_hold`: 辞退
+
+- 境界ヒステリシス（判定ブレ防止）:
+- `h = 2`
+- `prev_decision = 受諾` かつ `S_final >= threshold_accept - h` なら `受諾` を維持
+- `prev_decision = 辞退` かつ `S_final < threshold_hold + h` なら `辞退` を維持
+- それ以外は生判定を採用
+- `保留` は固定維持せず、その時点の生判定を優先
+
+- 出力（毎往復更新）:
+- `decision_result`（受諾/保留/辞退）
+- `threshold_accept`, `threshold_hold`
+- `decision_margin = S_final - threshold_accept`
+- `persuasion_headroom = max(0, threshold_accept - S_final)`
+
+#### 出発予約と次の日キュー（v0.7 / 確定）
+
+- 案件-冒険者ペアの内部状態（`assignment_state`）:
+- `INTERVIEWING`（面談中）
+- `HOLD`（保留継続）
+- `DECLINED`（辞退確定）
+- `ACCEPT_PENDING`（受諾済み・出発待ち）
+- `IN_MISSION`（出発中）
+- `RETURNED_UNREAD`（帰還済み・日報未読）
+- `CLOSED`（終了）
+
+- キュー（件数上限なし）:
+- `departure_queue`: 出発判定待ち（`assignment_id, due_day, pending_days, retry_count`）
+- `mission_queue`: 出発済み案件（`mission_id, depart_day, return_due_day, result_snapshot`）
+- `report_queue`: 未読日報（`report_id, returned_day, unread=true`）
+
+- 面談結果の反映:
+- `decision_result=受諾` かつ `D>=65`:
+- `assignment_state = ACCEPT_PENDING`
+- `departure_queue` に `due_day=current_day` で投入
+- `decision_result=受諾` かつ `D<65`（本人見送り）:
+- `assignment_state = ACCEPT_PENDING`
+- `departure_queue` に `due_day=current_day+1` で投入
+- `decision_result=保留`: `assignment_state = HOLD`
+- `decision_result=辞退`: `assignment_state = DECLINED`（即 `CLOSED` 可）
+
+- `次の日` 押下時の処理順（固定）:
+- 1. 未読日報要約がある場合は進行ブロック（確認必須）
+- 2. `day += 1`
+- 3. 依頼終了条件を先に評価（期限切れ/他ギルド達成/依頼主都合）
+- 4. `departure_queue` の `due_day <= day` を処理
+- 5. 出発成立分を `mission_queue` に登録
+- 6. `mission_queue` の `return_due_day <= day` を `report_queue` へ移動
+- 7. 新規依頼流入
+- 8. 日次応募発生
+
+- 出発待ち再判定（`departure_queue`）:
+- `D_day = clamp(S_final + mood_daily_noise - 0.6*fatigue_today - 0.15*pending_days + rand(-6,+6), 0, 100)`
+- `D_day >= 65` で出発確定
+- 未満なら `pending_days += 1`, `retry_count += 1`, `due_day = day+1`
+- `pending_days >= 7` で自動 `HOLD` へ戻す（理由: 自主見送り継続）
+- 冒険者が `離脱中/退団/別任務中` なら当該エントリは `CLOSED`（不成立終了）
+
+- 出発確定時:
+- ミッションは出発時に1回だけ内部実行（`runMission`）し `result_snapshot` を保存
+- `return_due_day = depart_day + duration_days`
+- `duration_days = 0` は同日帰還扱い
+- 同一 `次の日` 処理内で `return_due_day <= day` なら即 `report_queue` へ積む
+
+- `HOLD` 継続と解消:
+- `HOLD` はプレイヤー再提案まで維持
+- ただし依頼終了条件成立時は自動 `CLOSED`
+- `HOLD` は `departure_queue` に載せない（自動再出発判定しない）
+
+#### 面談1往復の内部更新（v0.4 / 確定）
+
+- 1往復の定義:
+- プレイヤー1操作（`質問 / 追加ヒアリング / 提案 / 説得`）に対して、冒険者が1回返答する単位
+- 返答直後に内部値を更新し、次の操作へ進む
+
+- 面談セッション状態（開始時）:
+- `interview_turn = 0`
+- `interview_load = 0`（`0〜120`）
+- `same_action_streak = 0`
+- `same_topic_streak = 0`
+- `persuasion_window = []`（最新2件の `persuasion_delta_turn`）
+- `persuasion_resistance = 0`（`0〜100`）
+- `persuasion_try_count = 0`
+- `ineffective_streak = 0`
+- `persuasion_locked = false`
+- `hearing_delta_* = 0`（`difficulty / hazard / reward / style / honor / dishonor / visibility`）
+- `hearing_count_* = 0`
+- `last_hearing_signal_* = null`
+- `mood_shift_talk = 0`（`-20〜+20`）
+- `trust_shift_talk = 0`（`-20〜+20`）
+- `fatigue_delta_talk = 0`（`0〜20`）
+- `stop_flag = false`
+
+- 1往復の更新順序（固定）:
+- `interview_turn += 1`
+- ヒアリング対象がある場合は `hearing_delta_*` を先に更新
+- `load_delta` を算出し `interview_load` を更新
+- 説得行動なら `persuasion_delta_turn` と `persuasion_resistance` を更新して `persuasion_window` へ積む
+- `mood_shift_talk / trust_shift_talk / fatigue_delta_talk` を更新
+- 要素値を再計算し `S_base`, `S_final`, `decision_result` を更新
+- `interview_load >= T_stop` なら `stop_flag = true`（「もういい」終了）
+
+- ヒアリング更新式（対象項目ごと）:
+- `signal_before = clamp(disclosed_value + hearing_delta, 0, 100)`
+- `gap_now = actual_value - signal_before`
+- `response_quality = clamp(1 - interview_load/140 - 0.06*hearing_count, 0.35, 1.00)`
+- `delta = round(gap_now * r_client * response_quality + rand(-2, +2))`
+- `hearing_delta = clamp(hearing_delta + delta, -25, +25)`
+- `hearing_count += 1`
+- `signal_after = clamp(disclosed_value + hearing_delta, 0, 100)`
+- `unknown` 項目の開示確率:
+- `p_reveal = clamp(0.75*response_quality - 0.10*(hearing_count-1), 0.20, 0.80)`
+- `rand(0,1) <= p_reveal` で `known` 化
+
+- 面談負荷（1往復）:
+- `base_load`: `質問=6 / 追加ヒアリング=12 / 提案=5 / 説得=8`
+- `repeat_topic_penalty = 10`（同一topic連続時）
+- `repeat_action_penalty = min(8, 4*(same_action_streak-1))`（同一行動2連続目以降）
+- `ambiguous_penalty = 8`（ヒアリング後に `|signal_after - signal_before| <= 2`）
+- `contradiction_penalty = 15`（同一項目で `|signal_after - last_hearing_signal| >= 12`）
+- `load_delta = base_load + repeat_topic_penalty + repeat_action_penalty + ambiguous_penalty + contradiction_penalty`
+- `interview_load = clamp(interview_load + load_delta, 0, 120)`
+
+- 説得反映（1往復）:
+- `persuasion_delta_turn` は前節の基礎式で算出する
+- `persuasion_window` は最新2件のみ保持（`[latest, prev]`、非説得往復は `0` をpush）
+- 面談時点の説得寄与は `persuasion_effective = clamp(latest + 0.6*prev, -12, +12)` を使用
+
+- 感情・関係・疲労の更新:
+- `info_gain_avg = mean(abs(delta_f))`（ヒアリングなしなら `0`）
+- `mood_delta_turn = clamp(0.30*persuasion_delta_turn + 0.05*info_gain_avg - 0.18*load_delta + rand(-1,+1), -5, +5)`
+- `trust_delta_turn = clamp(0.24*persuasion_delta_turn + 0.06*info_gain_avg - 0.12*load_delta, -4, +4)`
+- `fatigue_delta_turn = clamp(ceil(load_delta / 8), 0, 4)`
+- `mood_shift_talk = clamp(mood_shift_talk + mood_delta_turn, -20, +20)`
+- `trust_shift_talk = clamp(trust_shift_talk + trust_delta_turn, -20, +20)`
+- `fatigue_delta_talk = clamp(fatigue_delta_talk + fatigue_delta_turn, 0, 20)`
+
+- 要素値再計算への反映:
+- `本人の疲労/気分` は `condition_now = clamp(condition_base - fatigue_delta_talk + mood_shift_talk, 0, 100)` を使用
+- `ギルドへの信頼` は `guild_trust_now = clamp(guild_trust_base + trust_shift_talk, 0, 100)` を使用
+- `依頼内容の明確さ` や `危険適合度` は更新済み `signal_after` で再計算
+- `S_base_now = Σ(重み_i × 要素値_i_now) / 100`
+- `S_final = clamp(S_base_now + persuasion_effective, 0, 100)`
+- 判定は既定閾値（受諾/保留/辞退）をそのまま適用
+
+- AI向け診断値（毎往復更新）:
+- `decision_score = S_final`
+- `decision_margin = S_final - threshold_accept`
+- `persuasion_headroom = max(0, threshold_accept - S_final)`
+- `blocking_factors`: `gap_i = value_i_now - 50` の下位2件（`gap_i < -8`）
+- `positive_factors`: `gap_i` の上位1件（`gap_i > +8`）
+- `persuasion_state`: `resistance / ineffective_streak / locked`
+
+#### 説得行動の累積・減衰・打ち切り（v0.5 / 確定）
+
+- 累積:
+- 説得行動を実行した往復では `persuasion_delta_turn` を `persuasion_window` へpush
+- `persuasion_effective = latest + 0.6*prev` で累積（上限 `-12〜+12`）
+- 同一行動の連打は `repeat_penalty` と `resistance_penalty` が重なって効きにくくなる
+
+- 減衰:
+- 説得以外（質問/ヒアリング/提案）の往復では `persuasion_window` に `0` をpush
+- これにより前回説得効果は次往復で `60%`、2往復後に `0` まで自然減衰する
+- 非説得往復では `persuasion_resistance = clamp(persuasion_resistance - 8, 0, 100)` として反発も緩和する
+
+- 反発（resistance）更新:
+- 説得往復ごとに `persuasion_try_count += 1`
+- `decision_margin_prev` は当該往復の更新前値（初回は `decision_margin_now` と同値扱い）
+- `decision_margin_now` は `S_final` 更新後の値
+- `margin_gain = decision_margin_now - decision_margin_prev`
+- `ineffective = (persuasion_delta_turn <= 1) && (margin_gain <= 2)`
+- `ineffective` なら `ineffective_streak += 1`、それ以外は `0`
+- `resistance_gain = 8 + (same_action_streak>=3 ? 6 : 0) + (info_gain_avg<3 ? 4 : 0)`
+- `persuasion_resistance = clamp(persuasion_resistance + resistance_gain - (info_gain_avg>=8 ? 5 : 0), 0, 100)`
+
+- 説得打ち切り（説得のみ禁止）:
+- 次の条件をすべて満たすと `persuasion_locked = true`
+- `persuasion_try_count >= 3`
+- `ineffective_streak >= 2`
+- `persuasion_resistance >= 60`
+- `persuasion_locked = true` の間、説得行動は受け付けるが効果 `0`（`persuasion_delta_turn=0`）
+- ロック中に説得を続けると `load_delta += 6`, `mood_delta_turn -= 2`, `trust_delta_turn -= 1`
+
+- 面談打ち切り（会話終了）との関係:
+- 説得打ち切りは「説得だけ不可」で、質問/ヒアリング/提案は継続可能
+- 面談全体の終了は従来どおり `interview_load >= T_stop` で判定する
+
 #### 「もういい」打ち切り判定
 
 - 面談中に `面談負荷` を内部加算する
-- 負荷要因（基準値）:
-- 通常質問 `+6`
-- 同系質問の反復 `+10`
-- 追加ヒアリング `+12`
-- 曖昧回答の継続 `+8`
-- 矛盾説明の発生 `+15`
+- `面談負荷` の1往復計算は前節 `面談1往復の内部更新（v0.4）` の `load_delta` を正本とする
+- 直感対応（再掲）:
+- `質問=6 / 追加ヒアリング=12 / 提案=5 / 説得=8`
+- 同系反復 `+10`、曖昧 `+8`、矛盾 `+15`、同一行動連打ペナルティあり
 - 打ち切り閾値:
 - `T_stop = clamp(70 + 8c + 6a - 10n + bias_stop, 35, 95)`
 - `bias_stop` は個体補正（`-20〜+20`）

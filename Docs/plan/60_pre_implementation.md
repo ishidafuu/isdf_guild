@@ -12,15 +12,75 @@
 
 1. 未読日報要約の確認
 2. 日付更新
-3. 同日帰還判定（同日帰還あり）
-4. 新規依頼流入
-5. 日次応募発生
+3. 依頼終了条件の解決（期限切れ / 他ギルド達成 / 依頼主都合）
+4. 出発待ちキュー処理（`ACCEPT_PENDING` の再判定）
+5. 帰還判定（同日帰還あり）
+6. 新規依頼流入
+7. 日次応募発生
+
+### 次の日キュー（固定）
+
+- キュー種別:
+- `departure_queue`（出発待ち）
+- `mission_queue`（進行中）
+- `report_queue`（帰還済み未読）
+- 面談で `受諾` になった案件のみ `departure_queue` に入る
+- `保留` はキューに入れず、再提案待ちのまま維持する
+- `report_queue` が1件でも未読なら次の `次の日` はブロックする
 
 ### 保存方式
 
 - メイン保存は `IndexedDB`（履歴・ログ量が多いため）
 - 軽量設定は `localStorage`（UI設定など）
 - 保存データはローカル端末内のみ
+
+### IndexedDBスキーマ（MVP固定）
+
+- DB名: `isdfGuildMvp`
+- バージョン: `1`
+- 文字列IDはすべて `prefix_uuid` 形式（例: `adv_...`, `req_...`, `asg_...`）
+
+| store | keyPath | 主なフィールド | index |
+| --- | --- | --- | --- |
+| `meta` | `key` | `value`（`current_day`, `world_seed`, `last_auto_save_at` など） | なし |
+| `clients` | `client_id` | `name`, `type`, `trust_axes`, `error_profile`, `created_day` | `type`, `created_day` |
+| `adventurers` | `adventurer_id` | `name`, `big5`, `status`, `fatigue`, `mood`, `trust_guild_base`, `available_day` | `status`, `available_day`, `created_day` |
+| `requests` | `request_id` | `client_id`, `status`, `board_scope`, `disclosed_*`, `actual_*`, `expires_day`, `created_day` | `status`, `board_scope`, `expires_day`, `client_id` |
+| `assignments` | `assignment_id` | `request_id`, `adventurer_id`, `assignment_state`, `decision_state`, `interview_state`, `prep_bonus`, `updated_day` | `request_id`, `adventurer_id`, `assignment_state`, `updated_day` |
+| `relations` | `relation_id` | `source_type`, `source_id`, `target_type`, `target_id`, `affinity`, `mission_trust`, `rivalry`, `resentment`, `pair_synergy`, `pair_tension`, `last_updated_day`, `last_event_id` | `source_id`, `target_id`, `source_type`, `target_type`, `last_updated_day` |
+| `relation_events` | `event_id` | `relation_id`, `day`, `event_type`, `delta`, `mission_id`, `assignment_id`, `note_digest` | `relation_id`, `day`, `event_type` |
+| `departure_queue` | `assignment_id` | `adventurer_id`, `request_id`, `due_day`, `pending_days`, `retry_count`, `created_day` | `due_day`, `adventurer_id` |
+| `mission_runs` | `mission_id` | `assignment_id`, `depart_day`, `return_due_day`, `duration_days`, `result_snapshot`, `state` | `assignment_id`（unique）, `return_due_day`, `state` |
+| `reports` | `report_id` | `mission_id`, `returned_day`, `unread`, `summary3`, `detail_payload` | `unread`, `returned_day`, `mission_id` |
+| `interview_logs` | `log_id` | `assignment_id`, `day`, `turn`, `action`, `decision_state`, `summary_text`, `internal_digest` | `assignment_id`, `day`, `adventurer_id` |
+| `reputation_daily` | `rep_id` | `day`, `client_axes`, `adventurer_axes`, `delta_reason` | `day` |
+| `ai_cache` | `cache_key` | `event_type`, `entity_id`, `day`, `context_hash`, `text_json`, `created_at`, `expires_at` | `event_type`, `entity_id`, `expires_at` |
+| `debug_metrics` | `metric_id` | `day`, `category`, `payload`, `created_at` | `day`, `category` |
+
+- 状態値（固定）:
+- `requests.status`: `NEW / POSTED / WITHDRAWN / EXPIRED / CLOSED`
+- `assignments.assignment_state`: `INTERVIEWING / HOLD / DECLINED / ACCEPT_PENDING / IN_MISSION / RETURNED_UNREAD / CLOSED`
+- `mission_runs.state`: `RUNNING / RETURNED / CLOSED`
+- `relations.source_type/target_type`: `ADVENTURER / CLIENT`
+
+- 参照整合（アプリ側保証）:
+- `assignments.request_id -> requests.request_id`
+- `assignments.adventurer_id -> adventurers.adventurer_id`
+- `relations.source_id -> adventurers.adventurer_id`（`source_type=ADVENTURER`）
+- `relations.target_id -> adventurers.adventurer_id | clients.client_id`
+- `relation_events.relation_id -> relations.relation_id`
+- `departure_queue.assignment_id -> assignments.assignment_id`
+- `mission_runs.assignment_id -> assignments.assignment_id`（1:1）
+- `reports.mission_id -> mission_runs.mission_id`
+
+- `次の日` 処理のトランザクション境界（readwrite一括）:
+- 対象ストア: `meta`, `requests`, `assignments`, `relations`, `relation_events`, `departure_queue`, `mission_runs`, `reports`, `adventurers`, `reputation_daily`, `debug_metrics`
+- 失敗時はロールバックして `current_day` を進めない
+- 成功時のみ `meta.current_day` と `last_auto_save_at` を更新
+
+- データ圧縮（既定）:
+- `interview_logs` と `debug_metrics` は最新30日を高粒度保持
+- 31日以前は日単位サマリへ圧縮し、詳細ペイロードを削除して容量を抑制
 
 ### オートセーブ方針
 

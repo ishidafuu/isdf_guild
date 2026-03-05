@@ -97,8 +97,12 @@
     "decision_score": 62.4,
     "threshold_accept": 73,
     "threshold_hold": 43,
+    "threshold_mode": "dynamic_v0_6",
     "decision_margin": -10.6,
     "persuasion_headroom": 10.6,
+    "persuasion_locked": false,
+    "persuasion_resistance": 24,
+    "ineffective_streak": 1,
     "result_class": null,
     "reputation_hints": ["safety_down_small"]
   },
@@ -107,7 +111,10 @@
     "base_delta": 2.8,
     "factor_delta": 1.9,
     "repeat_penalty": 0.0,
-    "persuasion_delta": 4.7
+    "resistance_penalty": -1.0,
+    "timing_penalty": 0.0,
+    "persuasion_delta_turn": 3.7,
+    "persuasion_effective": 5.1
   },
   "diagnostics": {
     "blocking_factors": [
@@ -121,6 +128,26 @@
   "history_digest": [
     "前回は危険説明が不足していたと感じている"
   ],
+  "relation_context": {
+    "teammate_edges": [
+      {
+        "target_id": "adv_031",
+        "tag": "健全ライバル",
+        "affinity": 56,
+        "mission_trust": 64,
+        "rivalry": 74,
+        "resentment": 28
+      }
+    ],
+    "client_edge": {
+      "target_id": "cli_004",
+      "tag": "不信",
+      "affinity": 41,
+      "mission_trust": 33,
+      "rivalry": 12,
+      "resentment": 69
+    }
+  },
   "constraints": {
     "max_chars": 120,
     "style": "軽すぎない、読みやすい"
@@ -168,16 +195,23 @@
 - `decision_score`（最終スコア）
 - `threshold_accept`
 - `threshold_hold`
+- `threshold_mode`（`dynamic_v0_6`）
 - `decision_margin`（受諾閾値との差。正なら受諾側）
 - `persuasion_headroom`（受諾までの不足量。保留時に使用）
+- `persuasion_locked`（説得が効かない状態か）
+- `persuasion_resistance`（説得への反発蓄積）
+- `ineffective_streak`（不発説得の連続）
 - 反映ルール:
 - `|decision_margin| <= 6`: 迷いが強い文面（「あと一押し」感）
 - `7〜15`: 中程度の確信
 - `>=16`: 強い確信（受諾/辞退ともに明確）
 - これにより「ギリギリ辞退」「完全NG」の差を会話上で表現する
+- `threshold_accept / threshold_hold` は固定値ではなく、面談負荷・反発・信頼回復で毎往復更新される
 - `style_fit` と `honor_outlook` は受諾判定スコアに含める
 - AIには両要素のギャップも渡し、返答文の不満理由に反映させる
 - 説得行動時は `persuasion` 内訳も渡し、「何が効いた/効かなかったか」を文面へ反映する
+- `persuasion_locked=true` の場合は「これ以上この方向の説得は受けない」ニュアンスを返答へ反映する
+- `relation_context` がある場合は、相棒/ライバル/不信のニュアンスを返答文に1要素だけ反映する
 
 ## 不満点の言語化ルール（確定）
 
