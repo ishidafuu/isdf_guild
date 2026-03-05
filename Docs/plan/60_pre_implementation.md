@@ -22,8 +22,8 @@
 
 - キュー種別:
 - `departure_queue`（出発待ち）
-- `mission_queue`（進行中）
-- `report_queue`（帰還済み未読）
+- `mission_queue`（進行中。保存実体は `mission_runs(state=RUNNING)`）
+- `report_queue`（帰還済み未読。保存実体は `reports(unread=true)`）
 - 面談で `受諾` になった案件のみ `departure_queue` に入る
 - `保留` はキューに入れず、再提案待ちのまま維持する
 - `report_queue` が1件でも未読なら次の `次の日` はブロックする
@@ -52,7 +52,7 @@
 | `departure_queue` | `assignment_id` | `adventurer_id`, `request_id`, `due_day`, `pending_days`, `retry_count`, `created_day` | `due_day`, `adventurer_id` |
 | `mission_runs` | `mission_id` | `assignment_id`, `depart_day`, `return_due_day`, `duration_days`, `result_snapshot`, `state` | `assignment_id`（unique）, `return_due_day`, `state` |
 | `reports` | `report_id` | `mission_id`, `returned_day`, `unread`, `summary3`, `detail_payload` | `unread`, `returned_day`, `mission_id` |
-| `interview_logs` | `log_id` | `assignment_id`, `day`, `turn`, `action`, `decision_state`, `summary_text`, `internal_digest` | `assignment_id`, `day`, `adventurer_id` |
+| `interview_logs` | `log_id` | `assignment_id`, `adventurer_id`, `day`, `turn`, `action`, `decision_state`, `summary_text`, `internal_digest` | `assignment_id`, `day`, `adventurer_id` |
 | `reputation_daily` | `rep_id` | `day`, `client_axes`, `adventurer_axes`, `delta_reason` | `day` |
 | `ai_cache` | `cache_key` | `event_type`, `entity_id`, `day`, `context_hash`, `text_json`, `created_at`, `expires_at` | `event_type`, `entity_id`, `expires_at` |
 | `debug_metrics` | `metric_id` | `day`, `category`, `payload`, `created_at` | `day`, `category` |

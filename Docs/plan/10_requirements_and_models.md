@@ -359,8 +359,8 @@
 
 - キュー（件数上限なし）:
 - `departure_queue`: 出発判定待ち（`assignment_id, due_day, pending_days, retry_count`）
-- `mission_queue`: 出発済み案件（`mission_id, depart_day, return_due_day, result_snapshot`）
-- `report_queue`: 未読日報（`report_id, returned_day, unread=true`）
+- `mission_queue`: 出発済み案件（概念キュー。保存実体は `mission_runs(state=RUNNING)`）
+- `report_queue`: 未読日報（概念キュー。保存実体は `reports(unread=true)`）
 
 - 面談結果の反映:
 - `decision_result=受諾` かつ `D>=65`:
