@@ -43,8 +43,8 @@
 | store | keyPath | 主なフィールド | index |
 | --- | --- | --- | --- |
 | `meta` | `key` | `value`（`current_day`, `world_seed`, `last_auto_save_at` など） | なし |
-| `clients` | `client_id` | `name`, `type`, `trust_axes`, `error_profile`, `created_day` | `type`, `created_day` |
-| `adventurers` | `adventurer_id` | `name`, `big5`, `status`, `fatigue`, `mood`, `trust_guild_base`, `available_day` | `status`, `available_day`, `created_day` |
+| `clients` | `client_id` | `name`, `type`, `trust_axes`, `error_profile`, `public_digest`, `private_dossier`, `volatile_hook`, `created_day` | `type`, `created_day` |
+| `adventurers` | `adventurer_id` | `name`, `big5`, `status`, `fatigue`, `mood`, `trust_guild_base`, `public_digest`, `private_dossier`, `volatile_hook`, `available_day` | `status`, `available_day`, `created_day` |
 | `requests` | `request_id` | `client_id`, `status`, `board_scope`, `disclosed_*`, `actual_*`, `expires_day`, `created_day` | `status`, `board_scope`, `expires_day`, `client_id` |
 | `assignments` | `assignment_id` | `request_id`, `adventurer_id`, `assignment_state`, `decision_state`, `interview_state`, `prep_bonus`, `updated_day` | `request_id`, `adventurer_id`, `assignment_state`, `updated_day` |
 | `relations` | `relation_id` | `source_type`, `source_id`, `target_type`, `target_id`, `affinity`, `mission_trust`, `rivalry`, `resentment`, `pair_synergy`, `pair_tension`, `last_updated_day`, `last_event_id` | `source_id`, `target_id`, `source_type`, `target_type`, `last_updated_day` |

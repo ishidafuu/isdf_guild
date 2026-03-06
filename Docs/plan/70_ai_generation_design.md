@@ -19,11 +19,11 @@
 
 1. 冒険者初期生成（非同期）
 - トリガー: ワールド初期化、日次応募で新規流入
-- 出力: 紹介文、自己評価文、口調ルール
+- 出力: 紹介文、自己評価文、口調ルール、キャラ調査書JSON
 
 2. 依頼主初期生成（非同期）
 - トリガー: ワールド初期化
-- 出力: 人物紹介文、交渉スタイル文、申告傾向説明文
+- 出力: 人物紹介文、交渉スタイル文、申告傾向説明文、キャラ調査書JSON
 
 3. 依頼文生成（同期）
 - トリガー: 新規依頼流入時
@@ -59,6 +59,33 @@
 
 - 受諾可否の度合いはUIメーターやヒントを出さず、文面のみで表現する
 - プレイヤーは返答文から「何が不満か」「どこを改善すべきか」を読み取る設計にする
+
+## キャラ調査書（オリジナル運用）
+
+- 荒木飛呂彦先生のキャラ設計で知られる「人物を多面的に掘る発想法」は参考にしてよい
+- ただし既存の書籍・資料にある設問文や構成をそのまま転載しない
+- 実装では「発想法を参考にしたオリジナルの調査書」として生成する
+- 用途:
+- 会話の一貫性維持
+- 行動理由の肉付け
+- ミッション後ログでの感情反応の安定化
+- UIでは全文を常時見せず、要約表示と内部参照を分ける
+
+## 調査書スキーマ（MVP）
+
+- `core_identity`: 通り名、年齢帯、出身、現職、見た目の印象
+- `daily_texture`: 普段の生活、金銭感覚、寝起き、食の好み、癖
+- `values`: 誇り、禁忌、怒りの導火線、弱み、譲れない線
+- `social`: 目上への態度、対等な相手への態度、後輩への態度、恋愛観、友情観
+- `combat_work`: 得意役割、苦手役割、撤退観、名誉観、汚れ仕事への耐性
+- `history_hook`: 子供時代の記憶、転機、秘密、負い目、いま欲しいもの
+- `speech_rule`: 一人称、語尾傾向、言い淀み、口が悪くなる条件
+- `guild_view`: ギルドへの期待、不満、居心地、将来像
+
+- 出力形式:
+- `public_digest`: UI表示向け短文
+- `private_dossier`: 内部保持JSON
+- `volatile_hook`: 直近30日で変動しやすい話題1件
 
 ## 入力コンテキスト契約（共通）
 
@@ -154,6 +181,13 @@
   }
 }
 ```
+
+## 初期生成の追加入力/出力（調査書対応）
+
+- `ADVENTURER_PROFILE` と `CLIENT_PROFILE` は本文に加えて `public_digest`, `private_dossier`, `volatile_hook` を返す
+- `private_dossier` は会話用の内部参照であり、UIへ全文露出しない
+- `public_digest` はプロフィール欄や面談画面の短文表示に使う
+- `volatile_hook` は最近の悩み/執着/気がかりとして扱い、会話の鮮度を作る
 
 ## 情報公開境界（確定）
 
@@ -331,7 +365,7 @@ event_type: ADVENTURER_PROFILE
 world: {city_name}
 input: {big5_values, background_tags, skill_tags, self_eval_bias}
 constraints: {max_chars: 180}
-required_json_keys: text, intent_tags, reason_summary
+required_json_keys: text, public_digest, private_dossier, volatile_hook, intent_tags, reason_summary
 ```
 
 ### 2. 面談応答生成
