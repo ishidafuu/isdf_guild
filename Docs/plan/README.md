@@ -28,35 +28,38 @@
 8. `12_early_mission_pool.md`
 - 序盤で自然に流入する案件プールと再利用方針
 
-9. `10_requirements_and_models.md`
+9. `13_creature_templates.md`
+- 地域文脈と依頼文脈に結びついた危険生物テンプレート
+
+10. `10_requirements_and_models.md`
 - ヒアリングで確定した要件
 - 不完全情報・評判・受諾/辞退などの判定モデル
 - ミッション結果算出ロジック
 
-10. `20_priorities_and_mvp.md`
+11. `20_priorities_and_mvp.md`
 - Must/Should/Could
 - MVPの最小成立条件
 
-11. `30_ui_drafts.md`
+12. `30_ui_drafts.md`
 - 日中運用ハブ / 個別面談 / 帰還日報のUI草案
 
-12. `40_execution_plan.md`
+13. `40_execution_plan.md`
 - 開発順序とデモシナリオ
 
-13. `50_test_and_debug.md`
+14. `50_test_and_debug.md`
 - バランス調整用テストケース
 - デバッグ観測順と調整優先度
 
-14. `60_pre_implementation.md`
+15. `60_pre_implementation.md`
 - 実装前に固定した技術仕様（保存、オートセーブ、乱数、AI契約）
 
-15. `70_ai_generation_design.md`
+16. `70_ai_generation_design.md`
 - AI生成の責務分離、イベント設計、入出力契約、品質ガード
 
-16. `71_character_samples.md`
+17. `71_character_samples.md`
 - キャラ生成サンプル、調査書の試作例
 
-17. `99_changelog.md`
+18. `99_changelog.md`
 - 変更履歴
 
 ## 編集方針

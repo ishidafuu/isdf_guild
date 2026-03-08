@@ -13,6 +13,7 @@
 - `plan/08_request_ecology.md`: ギルド周辺環境・依頼生態系
 - `plan/11_seasonal_dynamics.md`: 季節・祭事・景気変動
 - `plan/12_early_mission_pool.md`: 序盤案件プール
+- `plan/13_creature_templates.md`: 危険生物テンプレート
 - `plan/09_mission_framework.md`: ミッション設計基盤
 - `plan/10_requirements_and_models.md`: ヒアリング要件・判定モデル
 - `plan/20_priorities_and_mvp.md`: 要件優先度・MVP
