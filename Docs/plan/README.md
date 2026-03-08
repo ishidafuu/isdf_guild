@@ -22,35 +22,38 @@
 6. `09_mission_framework.md`
 - ミッション設計の骨格、地域別の典型案件、依頼テンプレート
 
-7. `10_requirements_and_models.md`
+7. `11_seasonal_dynamics.md`
+- 季節、祭事、景気変動と依頼傾向の変化
+
+8. `10_requirements_and_models.md`
 - ヒアリングで確定した要件
 - 不完全情報・評判・受諾/辞退などの判定モデル
 - ミッション結果算出ロジック
 
-8. `20_priorities_and_mvp.md`
+9. `20_priorities_and_mvp.md`
 - Must/Should/Could
 - MVPの最小成立条件
 
-9. `30_ui_drafts.md`
+10. `30_ui_drafts.md`
 - 日中運用ハブ / 個別面談 / 帰還日報のUI草案
 
-10. `40_execution_plan.md`
+11. `40_execution_plan.md`
 - 開発順序とデモシナリオ
 
-11. `50_test_and_debug.md`
+12. `50_test_and_debug.md`
 - バランス調整用テストケース
 - デバッグ観測順と調整優先度
 
-12. `60_pre_implementation.md`
+13. `60_pre_implementation.md`
 - 実装前に固定した技術仕様（保存、オートセーブ、乱数、AI契約）
 
-13. `70_ai_generation_design.md`
+14. `70_ai_generation_design.md`
 - AI生成の責務分離、イベント設計、入出力契約、品質ガード
 
-14. `71_character_samples.md`
+15. `71_character_samples.md`
 - キャラ生成サンプル、調査書の試作例
 
-15. `99_changelog.md`
+16. `99_changelog.md`
 - 変更履歴
 
 ## 編集方針
