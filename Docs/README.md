@@ -11,6 +11,7 @@
 - `plan/06_regional_structure.md`: 周辺地理・地方構造・歴史
 - `plan/07_world_review.md`: 世界観レビュー記録
 - `plan/08_request_ecology.md`: ギルド周辺環境・依頼生態系
+- `plan/09_mission_framework.md`: ミッション設計基盤
 - `plan/10_requirements_and_models.md`: ヒアリング要件・判定モデル
 - `plan/20_priorities_and_mvp.md`: 要件優先度・MVP
 - `plan/30_ui_drafts.md`: UI草案
