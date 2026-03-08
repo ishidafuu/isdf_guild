@@ -8,6 +8,7 @@
 - `plan/README.md`: 分割ドキュメントの案内
 - `plan/00_overview.md`: コンセプト・コアループ・世界観
 - `plan/05_world_setting.md`: 都市設定・ギルド制度・世界観詳細
+- `plan/06_regional_structure.md`: 周辺地理・地方構造・歴史
 - `plan/10_requirements_and_models.md`: ヒアリング要件・判定モデル
 - `plan/20_priorities_and_mvp.md`: 要件優先度・MVP
 - `plan/30_ui_drafts.md`: UI草案
