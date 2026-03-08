@@ -13,35 +13,38 @@
 3. `06_regional_structure.md`
 - エンベルク周辺地理、地方帯、歴史、依頼供給構造
 
-4. `10_requirements_and_models.md`
+4. `07_world_review.md`
+- 世界観レビュー観点、指摘、採否記録
+
+5. `10_requirements_and_models.md`
 - ヒアリングで確定した要件
 - 不完全情報・評判・受諾/辞退などの判定モデル
 - ミッション結果算出ロジック
 
-5. `20_priorities_and_mvp.md`
+6. `20_priorities_and_mvp.md`
 - Must/Should/Could
 - MVPの最小成立条件
 
-6. `30_ui_drafts.md`
+7. `30_ui_drafts.md`
 - 日中運用ハブ / 個別面談 / 帰還日報のUI草案
 
-7. `40_execution_plan.md`
+8. `40_execution_plan.md`
 - 開発順序とデモシナリオ
 
-8. `50_test_and_debug.md`
+9. `50_test_and_debug.md`
 - バランス調整用テストケース
 - デバッグ観測順と調整優先度
 
-9. `60_pre_implementation.md`
+10. `60_pre_implementation.md`
 - 実装前に固定した技術仕様（保存、オートセーブ、乱数、AI契約）
 
-10. `70_ai_generation_design.md`
+11. `70_ai_generation_design.md`
 - AI生成の責務分離、イベント設計、入出力契約、品質ガード
 
-11. `71_character_samples.md`
+12. `71_character_samples.md`
 - キャラ生成サンプル、調査書の試作例
 
-12. `99_changelog.md`
+13. `99_changelog.md`
 - 変更履歴
 
 ## 編集方針
