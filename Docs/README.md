@@ -15,6 +15,7 @@
 - `plan/12_early_mission_pool.md`: 序盤案件プール
 - `plan/13_creature_templates.md`: 危険生物テンプレート
 - `plan/14_client_voice_templates.md`: 依頼主の話し方テンプレート
+- `plan/15_adventurer_origin_templates.md`: 冒険者出自テンプレート
 - `plan/09_mission_framework.md`: ミッション設計基盤
 - `plan/10_requirements_and_models.md`: ヒアリング要件・判定モデル
 - `plan/20_priorities_and_mvp.md`: 要件優先度・MVP

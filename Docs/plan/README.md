@@ -34,35 +34,38 @@
 10. `14_client_voice_templates.md`
 - 依頼主タイプ、地域、切迫度に応じた話し方テンプレート
 
-11. `10_requirements_and_models.md`
+11. `15_adventurer_origin_templates.md`
+- 冒険者の出自カテゴリと仕事選好テンプレート
+
+12. `10_requirements_and_models.md`
 - ヒアリングで確定した要件
 - 不完全情報・評判・受諾/辞退などの判定モデル
 - ミッション結果算出ロジック
 
-12. `20_priorities_and_mvp.md`
+13. `20_priorities_and_mvp.md`
 - Must/Should/Could
 - MVPの最小成立条件
 
-13. `30_ui_drafts.md`
+14. `30_ui_drafts.md`
 - 日中運用ハブ / 個別面談 / 帰還日報のUI草案
 
-14. `40_execution_plan.md`
+15. `40_execution_plan.md`
 - 開発順序とデモシナリオ
 
-15. `50_test_and_debug.md`
+16. `50_test_and_debug.md`
 - バランス調整用テストケース
 - デバッグ観測順と調整優先度
 
-16. `60_pre_implementation.md`
+17. `60_pre_implementation.md`
 - 実装前に固定した技術仕様（保存、オートセーブ、乱数、AI契約）
 
-17. `70_ai_generation_design.md`
+18. `70_ai_generation_design.md`
 - AI生成の責務分離、イベント設計、入出力契約、品質ガード
 
-18. `71_character_samples.md`
+19. `71_character_samples.md`
 - キャラ生成サンプル、調査書の試作例
 
-19. `99_changelog.md`
+20. `99_changelog.md`
 - 変更履歴
 
 ## 編集方針
