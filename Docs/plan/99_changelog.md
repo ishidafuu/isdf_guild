@@ -1,5 +1,6 @@
 ## 24. 更新履歴
 
+- 2026-03-08: 世界観詳細章 `05_world_setting.md` を追加し、交易都市エンベルク・新設ギルド前提・主要組織・都市構造を整理
 - 2026-03-05: 初版作成
 - 2026-03-05: 冒険者ギルド経営（仲介型）コンセプトを反映
 - 2026-03-05: 潜在要件ヒアリング一次を反映
@@ -68,3 +69,8 @@
 - 2026-03-06: キャラ間心象モデル（相棒/ライバル/不信）をv0.8として追加し、保存・UI・AI入力へ接続
 - 2026-03-06: キュー概念名と保存ストア名の対応（`mission_queue`/`report_queue`）および `interview_logs` 項目定義を整合化
 - 2026-03-07: キャラ生成に「オリジナルのキャラ調査書」仕様を追加し、AI生成・保存・UI参照へ接続
+- 2026-03-07: キャラ生成サンプル2名を `71_character_samples.md` に追加し、Docs導線を更新
+- 2026-03-07: 人物年表 `character_journal`、経験学習値、BIG5長期ドリフト、実務評価軸を追加し、保存・UI・AI入力へ接続
+- 2026-03-07: `character_journal.event_kind` ごとの `delta_event` テーブルと条件修正を固定
+- 2026-03-07: `src/storage/schema.ts` と `src/storage/types.ts` に IndexedDB スキーマと型定義を追加
+- 2026-03-07: `src/sim/characterProgression.ts` に人物年表反映ロジックを追加し、`src/sim/characterProgression.example.ts` で3日サンプルを検証

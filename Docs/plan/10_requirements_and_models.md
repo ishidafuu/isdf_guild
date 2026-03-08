@@ -182,16 +182,166 @@
 - `協調性 A`
 - `神経症傾向 N`
 - 生成時は `50` を中心に分布させ、個体差としてばらつかせる
+- 生成時の値は `big5_base` として保持する
 - 個性補正:
 - 受諾/保留/辞退の閾値を `±10` で個別補正
 - 面談打ち切り閾値を `±20` で個別補正
-- BIG5は判定ロジック用の骨格とする
+- 判定に使う実効値は `big5_effective = clamp(big5_base + big5_drift, 0, 100)` とする
+- `big5_drift` は経験蓄積による長期変化で、各軸 `-12〜+12` に制限する
+- BIG5は判定ロジック用の骨格とし、短期変化は原則 `experience_state` 側で吸収する
 - これとは別に、会話・描写の一貫性用として `キャラ調査書` を持つ
 - `キャラ調査書` は数値判定に直接使わず、文面生成・関係ログ・プロフィール表示に使う
 
+#### 人物年表と経験反映（v0.9 / 確定）
+
+- 目的:
+- 推し冒険者の履歴を「ただの結果一覧」でなく、連続した人物史として読めるようにする
+- 失敗・負傷・成功・対人トラブルを、次回判断や口調の変化へつなげる
+- 性格を毎回ぶらさず、`芯の性格` と `経験で変わる判断癖` を分離する
+
+- 人物状態の3層:
+- `core_identity`: `big5_base` と `private_dossier`。人物の芯であり、急変させない
+- `experience_state`: 経験で変化する学習値。受諾判断・面談反応・最近の悩みに反映する
+- `career_eval`: 周囲から見た実務評価。依頼の来やすさ、会話での扱われ方に反映する
+
+- `character_journal` の記録単位:
+- 影響のある出来事ごとに1件保存する
+- 1件は `事実 / 感情 / 学習 / 状態変化` を持つ
+- 「面談の全発言」を残すのではなく、人物の転機になる要約だけを残す
+- 想定イベント種別:
+- `MISSION_RESULT`
+- `INJURY_OR_LEAVE`
+- `INTERVIEW_SUMMARY`
+- `CLIENT_FEEDBACK`
+- `RELATION_SHIFT`
+- `GUILD_CARE`
+
+- `delta_event` テーブル（v0.9.1 / 確定）:
+- `character_journal.event_kind` ごとに、まずベース差分を引き、その後条件修正を加える
+- `experience_state` の通常軸は `memory_next = clamp(50 + 0.88*(prev-50) + delta_event, 0, 100)` で更新
+- `category_confidence[category]` は `category_next = clamp(50 + 0.82*(prev-50) + delta_event, 0, 100)` で更新
+- `trait_pressure` は `pressure_next = clamp(0.94*prev + trait_vector_event*(0.6 + importance/100), -100, 100)` で更新
+- `career_eval` は当面、`prev + delta_event` の加算更新とする
+
+| event_kind | ベース分類 | importance | experience_state delta_event | career_eval delta_event | trait_vector_event | 備考 |
+| --- | --- | ---: | --- | --- | --- | --- |
+| `MISSION_RESULT` | `成功` | 64 | `self_efficacy +8`, `glory_drive +2`, `injury_caution -2`, `category_confidence +8` | `reliability +6`, `growth +4` | `E +8`, `C +4`, `N -5` | 役割一致 `+2` / 不一致 `-2` |
+| `MISSION_RESULT` | `部分成功` | 56 | `self_efficacy +3`, `glory_drive +1`, `category_confidence +3` | `reliability +2`, `growth +2` | `C +2`, `E +1`, `N -1` | 役割一致 `+2` / 不一致 `-2` |
+| `MISSION_RESULT` | `失敗` | 74 | `self_efficacy -6`, `injury_caution +6`, `principle_rigidity +2`, `category_confidence -6` | `reliability -5`, `growth +1` | `C +2`, `N +5` | 役割一致 `+2` / 不一致 `-2` |
+| `MISSION_RESULT` | `惨敗` | 88 | `self_efficacy -12`, `injury_caution +12`, `glory_drive -4`, `principle_rigidity +4`, `category_confidence -12` | `reliability -10`, `safety -8`, `growth -2` | `O -6`, `E -5`, `N +12` | 役割一致 `+2` / 不一致 `-2` |
+| `INJURY_OR_LEAVE` | `minor` | 60 | `injury_caution +10`, `self_efficacy -4`, `glory_drive -1` | `safety -2` | `N +4` | 軽傷 |
+| `INJURY_OR_LEAVE` | `major` | 76 | `injury_caution +18`, `self_efficacy -8`, `glory_drive -4` | `safety -6`, `growth -1` | `E -2`, `N +8` | 重傷 |
+| `INJURY_OR_LEAVE` | `long_leave` | 90 | `injury_caution +22`, `self_efficacy -12`, `glory_drive -6`, `principle_rigidity +2` | `safety -10`, `growth -2` | `O -6`, `E -5`, `N +12` | 長期離脱 |
+| `INTERVIEW_SUMMARY` | `accept` | 34 | `guild_bond +4`, `self_efficacy +2` | なし | `A +1`, `C +1` | 面談結果のベース |
+| `INTERVIEW_SUMMARY` | `hold` | 28 | `principle_rigidity +1` | なし | なし | 面談結果のベース |
+| `INTERVIEW_SUMMARY` | `decline` | 38 | `guild_bond -2`, `principle_rigidity +2`, `self_efficacy -1` | なし | `A -1`, `N +1` | 面談結果のベース |
+| `INTERVIEW_SUMMARY` | `cutoff` | 48 | `guild_bond -5`, `principle_rigidity +4`, `self_efficacy -2` | なし | `A -3`, `N +3` | 「もういい」で終了 |
+| `CLIENT_FEEDBACK` | `praise` | 42 | `self_efficacy +4` | `reliability +4`, `growth +2` | なし | 高可視性なら `flashiness +6` |
+| `CLIENT_FEEDBACK` | `neutral` | 24 | なし | なし | なし | 現状維持寄り |
+| `CLIENT_FEEDBACK` | `complaint` | 46 | `self_efficacy -3` | `reliability -4` | なし | 不当苦情なら `reliability -2` 相当まで緩和 |
+| `CLIENT_FEEDBACK` | `reoffer` | 52 | `self_efficacy +3` | `reliability +5`, `growth +2` | なし | 高可視性なら `flashiness +6` |
+| `RELATION_SHIFT` | `partner_gain` | 50 | `guild_bond +2`, `self_efficacy +3` | なし | `A +4`, `E +2`, `N -2` | 強度 `small/medium/large = 0.7/1.0/1.3倍` |
+| `RELATION_SHIFT` | `healthy_rivalry` | 44 | `glory_drive +4`, `self_efficacy +2` | なし | `E +2`, `C +1` | 同上 |
+| `RELATION_SHIFT` | `distrust` | 58 | `guild_bond -1`, `self_efficacy -2`, `principle_rigidity +4` | なし | `A -3`, `N +4` | 同上 |
+| `RELATION_SHIFT` | `resentment` | 54 | `injury_caution +2`, `self_efficacy -2`, `principle_rigidity +2` | なし | `A -2`, `N +3` | 同上 |
+| `GUILD_CARE` | `small` | 34 | `guild_bond +4`, `self_efficacy +2`, `injury_caution -1` | なし | `A +1`, `N -1` | 見舞い・一言 |
+| `GUILD_CARE` | `medium` | 46 | `guild_bond +7`, `self_efficacy +4`, `injury_caution -3` | なし | `A +2`, `N -2` | 丁寧な見舞い・再説明 |
+| `GUILD_CARE` | `large` | 58 | `guild_bond +10`, `self_efficacy +6`, `injury_caution -4` | なし | `A +3`, `N -3` | 復帰方針提示まで含む |
+
+- 条件修正（確定）:
+- `MISSION_RESULT` で `long_leave=true`: `category_confidence -8`, `injury_caution +8`, `self_efficacy -6`, `career_eval.safety -4`, `trait_vector N +6, E -2`, `importance +10`
+- `MISSION_RESULT` で `public_visibility >= 70`:
+- `成功`: `glory_drive +4`, `career_eval.flashiness +8`, `importance +4`
+- `部分成功`: `glory_drive +2`, `career_eval.flashiness +4`, `importance +2`
+- `MISSION_RESULT` で `information_betrayal=true`: `principle_rigidity +8`, `injury_caution +4`, `trait_vector A -8, C +5, N +9`, `importance +8`
+- `MISSION_RESULT` で `contract_violation_complicity=true`: `career_eval.ethics -8`, `importance +6`
+- `INJURY_OR_LEAVE` で仲間の支援が明確: `guild_bond +1`, `trait_vector A +6, E +3, N -4`, `importance +4`
+- `INTERVIEW_SUMMARY` の説明品質:
+- `good`: `guild_bond +3`
+- `mixed`: 追加なし
+- `poor`: `guild_bond -3`, `principle_rigidity +2`, `self_efficacy -1`
+- `INTERVIEW_SUMMARY` の圧力:
+- `supportive`: `guild_bond +2`, `self_efficacy +1`
+- `neutral`: 追加なし
+- `pushy`: `guild_bond -4`, `principle_rigidity +3`, `self_efficacy -1`, `trait_vector A -2, N +2`, `importance +4`
+- `INTERVIEW_SUMMARY` の透明性:
+- `honest`: `guild_bond +2`
+- `evasive`: `principle_rigidity +2`, `trait_vector N +2`, `importance +2`
+- `hidden`: `guild_bond -5`, `principle_rigidity +5`, `trait_vector A -3, N +4`, `importance +10`
+- `CLIENT_FEEDBACK` の `fairness=unfair`: `principle_rigidity +4`, `trait_vector A -1, N +3`, `importance +6`
+- `GUILD_CARE` の `care_type=fair_reassignment`: `guild_bond +2`
+- `GUILD_CARE` の `care_type=wait`: `self_efficacy +1`
+
+- `experience_state` の内部軸（各 `0-100`, 初期 `50`）:
+- `category_confidence[6]`: 依頼カテゴリごとの手応え。成功体験/苦手意識を蓄積する
+- `injury_caution`: 負傷や惨敗由来の慎重さ。高いほど危険案件に及び腰になる
+- `glory_drive`: 見せ場/名誉への引力。高いほど派手さや注目度を好む
+- `guild_bond`: ギルドへの帰属感と信頼。見舞い・納得感ある面談・公正配分で上がる
+- `self_efficacy`: 「自分ならやれる」という自己効力感。成功や称賛で上がり、惨敗で下がる
+- `principle_rigidity`: 倫理観の硬さ。裏切りや情報伏せの露見で上がりやすい
+
+- 中期学習値の更新式（共通）:
+- `memory_next = clamp(50 + 0.88*(memory_prev - 50) + delta_event, 0, 100)`
+- 中心 `50` へゆっくり戻るが、連続体験で偏りが定着する
+- カテゴリ別経験値は依頼カテゴリごとに独立保持する
+- `category_confidence_next = clamp(50 + 0.82*(category_confidence_prev - 50) + result_delta + role_match_bonus, 0, 100)`
+- `result_delta`: `成功 +8 / 部分成功 +3 / 失敗 -6 / 惨敗 -12`
+- `role_match_bonus`: 本人の得意領域と一致 `+2`、不一致 `-2`
+- 長期離脱が発生した場合、そのカテゴリへ追加で `-8`
+
+- BIG5長期ドリフト:
+- 内部で `trait_pressure[O/C/E/A/N]` を `-100〜+100` で保持する
+- 更新式: `pressure_next = clamp(0.94*pressure_prev + trait_vector_event * impact_scale, -100, 100)`
+- `impact_scale = 0.6 + importance/100`
+- 実効反映: `big5_drift = clamp(round(0.12 * pressure), -12, +12)`
+- 高頻度の小イベントではなく、中〜高重要度イベントの累積で少しずつ変わる
+
+- 代表的な `trait_vector_event`:
+- 大成功し称賛された: `E +8, C +4, N -5`
+- 慎重な準備で危機回避した: `C +7, N -3`
+- 情報伏せ露見で被害を受けた: `A -8, C +5, N +9`
+- 惨敗して長期離脱した: `O -6, E -5, N +12`
+- 仲間に救われた/支えられた: `A +6, E +3, N -4`
+
+- `career_eval` の内部軸（各 `0-100`, 初期 `50`）:
+- `reliability`: 任せた仕事を無難に通す期待
+- `safety`: 生還率・無茶の少なさ
+- `flashiness`: 派手さ、話題性、見栄え
+- `ethics`: 誠実さ、約束を守る印象
+- `growth`: 今後伸びそうか、経験を糧にしているか
+- UIでは原則非数値。`堅実`, `危なっかしい`, `華がある`, `筋を通す`, `伸び盛り` のようなラベルで出す
+
+- `career_eval` 更新の基準:
+- `成功`: `reliability +6`, `growth +4`
+- `部分成功`: `reliability +2`, `growth +2`
+- `失敗`: `reliability -5`, `growth +1`
+- `惨敗`: `reliability -10`, `safety -8`, `growth -2`
+- 長期離脱から復帰した初回成功: `growth +6`, `safety +2`
+- 派手な功績や公的注目が高い案件成功時: `flashiness +8`
+- 情報伏せ露見や契約違反に加担した場合: `ethics -8`
+- すべて `0-100` にクランプ
+
+- 受諾判断への反映:
+- BIG5由来の `o/c/e/a/n` は `big5_effective` から算出する
+- `危険適合度` は `danger_tolerance = clamp(50 + 0.35*(glory_drive-50) - 0.55*(injury_caution-50) + 0.25*(self_efficacy-50), 0, 100)` を基準値として使う
+- `ギルドへの信頼` は `guild_trust_signal = clamp(trust_guild_base + 0.60*(guild_bond-50), 0, 100)` を使う
+- `過去実績との適合` は `record_fit = clamp(0.45*category_confidence[request_category] + 0.25*self_efficacy + 0.20*career_eval.reliability + 0.10*career_eval.safety, 0, 100)` とする
+- `名誉見通し適合度` は既存の `honor_outlook` に加え、`flashiness` が高い人物ほど高可視性案件を前向きに受け取りやすい
+
+- 更新タイミング:
+- 面談終了時: `INTERVIEW_SUMMARY` を追加し、`guild_bond` と `principle_rigidity` を更新しうる
+- 日報確定時: `MISSION_RESULT` を追加し、カテゴリ経験・自己効力感・実務評価を更新する
+- 負傷/長期離脱確定時: `INJURY_OR_LEAVE` を追加し、`injury_caution` と `trait_pressure[N]` を強く更新する
+- 関係値の大きな変化時: `RELATION_SHIFT` を追加し、相棒化/不信/遺恨を人物史に残す
+- 見舞い・励ましなど回復支援時: `GUILD_CARE` を追加し、`guild_bond` と `volatile_hook` を更新する
+
+- `volatile_hook` の更新原則:
+- 直近30日の `character_journal` から、未消化の感情が最も強いものを優先する
+- 例: `依頼主不信`, `復帰後の焦り`, `相棒への恩`, `名を上げたい焦燥`
+
 #### 冒険者の受諾/保留/辞退判定
 
-- 計算では `o=(O-50)/50, c=(C-50)/50, e=(E-50)/50, a=(A-50)/50, n=(N-50)/50` を使う（各 `-1.0〜+1.0`）
+- 計算では `o=(O_effective-50)/50, c=(C_effective-50)/50, e=(E_effective-50)/50, a=(A_effective-50)/50, n=(N_effective-50)/50` を使う（各 `-1.0〜+1.0`）
 - 各冒険者はBIG5から評価要素重みを導出し、最終的に合計100へ正規化する
 - 評価要素（MVP）:
 - `報酬魅力度`

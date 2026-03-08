@@ -39,12 +39,14 @@
 - DB名: `isdfGuildMvp`
 - バージョン: `1`
 - 文字列IDはすべて `prefix_uuid` 形式（例: `adv_...`, `req_...`, `asg_...`）
+- 実装コード（TypeScript型/IndexedDB投入オブジェクト）は `camelCase` を採用する
+- この章の `snake_case` 表記は永続概念名であり、コード上では `adventurer_id -> adventurerId`, `event_kind -> eventKind` のように1:1対応する
 
 | store | keyPath | 主なフィールド | index |
 | --- | --- | --- | --- |
 | `meta` | `key` | `value`（`current_day`, `world_seed`, `last_auto_save_at` など） | なし |
 | `clients` | `client_id` | `name`, `type`, `trust_axes`, `error_profile`, `public_digest`, `private_dossier`, `volatile_hook`, `created_day` | `type`, `created_day` |
-| `adventurers` | `adventurer_id` | `name`, `big5`, `status`, `fatigue`, `mood`, `trust_guild_base`, `public_digest`, `private_dossier`, `volatile_hook`, `available_day` | `status`, `available_day`, `created_day` |
+| `adventurers` | `adventurer_id` | `name`, `big5_base`, `big5_drift`, `big5_effective`, `experience_state`, `career_eval`, `status`, `fatigue`, `mood`, `trust_guild_base`, `public_digest`, `private_dossier`, `volatile_hook`, `available_day` | `status`, `available_day`, `created_day` |
 | `requests` | `request_id` | `client_id`, `status`, `board_scope`, `disclosed_*`, `actual_*`, `expires_day`, `created_day` | `status`, `board_scope`, `expires_day`, `client_id` |
 | `assignments` | `assignment_id` | `request_id`, `adventurer_id`, `assignment_state`, `decision_state`, `interview_state`, `prep_bonus`, `updated_day` | `request_id`, `adventurer_id`, `assignment_state`, `updated_day` |
 | `relations` | `relation_id` | `source_type`, `source_id`, `target_type`, `target_id`, `affinity`, `mission_trust`, `rivalry`, `resentment`, `pair_synergy`, `pair_tension`, `last_updated_day`, `last_event_id` | `source_id`, `target_id`, `source_type`, `target_type`, `last_updated_day` |
@@ -53,15 +55,25 @@
 | `mission_runs` | `mission_id` | `assignment_id`, `depart_day`, `return_due_day`, `duration_days`, `result_snapshot`, `state` | `assignment_id`（unique）, `return_due_day`, `state` |
 | `reports` | `report_id` | `mission_id`, `returned_day`, `unread`, `summary3`, `detail_payload` | `unread`, `returned_day`, `mission_id` |
 | `interview_logs` | `log_id` | `assignment_id`, `adventurer_id`, `day`, `turn`, `action`, `decision_state`, `summary_text`, `internal_digest` | `assignment_id`, `day`, `adventurer_id` |
+| `character_journal` | `journal_id` | `adventurer_id`, `day`, `event_kind`, `importance`, `mission_id`, `assignment_id`, `related_ids`, `headline`, `fact_digest`, `emotion_digest`, `lesson_tags`, `trait_vector`, `state_delta` | `adventurer_id`, `day`, `event_kind`, `importance` |
 | `reputation_daily` | `rep_id` | `day`, `client_axes`, `adventurer_axes`, `delta_reason` | `day` |
 | `ai_cache` | `cache_key` | `event_type`, `entity_id`, `day`, `context_hash`, `text_json`, `created_at`, `expires_at` | `event_type`, `entity_id`, `expires_at` |
 | `debug_metrics` | `metric_id` | `day`, `category`, `payload`, `created_at` | `day`, `category` |
+
+- ネストオブジェクト定義（固定）:
+- `adventurers.big5_base / big5_drift / big5_effective`: `{ O, C, E, A, N }`
+- `adventurers.experience_state`: `{ category_confidence: { slay, guard, investigate, gather, transport, negotiate }, injury_caution, glory_drive, guild_bond, self_efficacy, principle_rigidity, trait_pressure: { O, C, E, A, N } }`
+- `adventurers.career_eval`: `{ reliability, safety, flashiness, ethics, growth }`
+- `character_journal.related_ids`: `{ client_id?, teammate_ids?, relation_id?, report_id? }`
+- `character_journal.state_delta`: `{ experience_state_delta, career_eval_delta, big5_drift_delta }`
+- `big5_effective` は検索/表示用のマテリアライズ値とし、保存時に `big5_base + big5_drift` から再計算する
 
 - 状態値（固定）:
 - `requests.status`: `NEW / POSTED / WITHDRAWN / EXPIRED / CLOSED`
 - `assignments.assignment_state`: `INTERVIEWING / HOLD / DECLINED / ACCEPT_PENDING / IN_MISSION / RETURNED_UNREAD / CLOSED`
 - `mission_runs.state`: `RUNNING / RETURNED / CLOSED`
 - `relations.source_type/target_type`: `ADVENTURER / CLIENT`
+- `character_journal.event_kind`: `MISSION_RESULT / INJURY_OR_LEAVE / INTERVIEW_SUMMARY / CLIENT_FEEDBACK / RELATION_SHIFT / GUILD_CARE`
 
 - 参照整合（アプリ側保証）:
 - `assignments.request_id -> requests.request_id`
@@ -72,15 +84,18 @@
 - `departure_queue.assignment_id -> assignments.assignment_id`
 - `mission_runs.assignment_id -> assignments.assignment_id`（1:1）
 - `reports.mission_id -> mission_runs.mission_id`
+- `character_journal.adventurer_id -> adventurers.adventurer_id`
 
 - `次の日` 処理のトランザクション境界（readwrite一括）:
-- 対象ストア: `meta`, `requests`, `assignments`, `relations`, `relation_events`, `departure_queue`, `mission_runs`, `reports`, `adventurers`, `reputation_daily`, `debug_metrics`
+- 対象ストア: `meta`, `requests`, `assignments`, `relations`, `relation_events`, `departure_queue`, `mission_runs`, `reports`, `adventurers`, `character_journal`, `reputation_daily`, `debug_metrics`
 - 失敗時はロールバックして `current_day` を進めない
 - 成功時のみ `meta.current_day` と `last_auto_save_at` を更新
 
 - データ圧縮（既定）:
 - `interview_logs` と `debug_metrics` は最新30日を高粒度保持
 - 31日以前は日単位サマリへ圧縮し、詳細ペイロードを削除して容量を抑制
+- `character_journal` はプレイヤーの人物史閲覧に使うため原則フル保持する
+- ただし `importance < 35` の `INTERVIEW_SUMMARY` は120日以降、週次要約へ圧縮可能
 
 ### オートセーブ方針
 
