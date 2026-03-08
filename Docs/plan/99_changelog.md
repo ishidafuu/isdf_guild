@@ -1,5 +1,6 @@
 ## 24. 更新履歴
 
+- 2026-03-09: `16_template_review.md` と `17_questions_for_user.md` を追加し、テンプレート群レビュー記録と今後の確認質問を整理
 - 2026-03-09: `15_adventurer_origin_templates.md` を追加し、冒険者の出自カテゴリと仕事選好テンプレートを整理
 - 2026-03-09: `14_client_voice_templates.md` を追加し、依頼主タイプ・地域・切迫度に応じた話し方テンプレートを整理
 - 2026-03-09: `13_creature_templates.md` を追加し、地域帯と依頼化文脈に結びついた危険生物テンプレートを整理
