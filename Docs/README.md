@@ -1,5 +1,7 @@
 # Docs
 
+最終更新: 2026-03-09
+
 このディレクトリは、ゲーム構想を青写真から具体案へ育てるための作業場所です。
 
 ## ファイル一覧
@@ -11,22 +13,22 @@
 - `plan/06_regional_structure.md`: 周辺地理・地方構造・歴史
 - `plan/07_world_review.md`: 世界観レビュー記録
 - `plan/08_request_ecology.md`: ギルド周辺環境・依頼生態系
-- `plan/11_seasonal_dynamics.md`: 季節・祭事・景気変動
-- `plan/12_early_mission_pool.md`: 序盤案件プール
-- `plan/13_creature_templates.md`: 危険生物テンプレート
-- `plan/14_client_voice_templates.md`: 依頼主の話し方テンプレート
-- `plan/15_adventurer_origin_templates.md`: 冒険者出自テンプレート
-- `plan/16_template_review.md`: テンプレート群レビュー記録
-- `plan/17_questions_for_user.md`: 次に確認したい質問事項
 - `plan/09_mission_framework.md`: ミッション設計基盤
-- `plan/10_requirements_and_models.md`: ヒアリング要件・判定モデル
-- `plan/20_priorities_and_mvp.md`: 要件優先度・MVP
-- `plan/30_ui_drafts.md`: UI草案
-- `plan/40_execution_plan.md`: MVP実行提案
-- `plan/50_test_and_debug.md`: テストケース・デバッグ手順
-- `plan/60_pre_implementation.md`: 実装前固定仕様
-- `plan/70_ai_generation_design.md`: AI生成設計（イベント/契約/品質ガード）
-- `plan/71_character_samples.md`: キャラ生成サンプル（試作2名）
+- `plan/10_seasonal_dynamics.md`: 季節・祭事・景気変動
+- `plan/11_early_mission_pool.md`: 序盤案件プール
+- `plan/12_creature_templates.md`: 危険生物テンプレート
+- `plan/13_client_voice_templates.md`: 依頼主の話し方テンプレート
+- `plan/14_adventurer_origin_templates.md`: 冒険者出自テンプレート
+- `plan/15_template_review.md`: テンプレート群レビュー記録
+- `plan/16_questions_for_user.md`: 次に確認したい質問事項
+- `plan/17_requirements_and_models.md`: ヒアリング要件・判定モデル
+- `plan/18_priorities_and_mvp.md`: 要件優先度・MVP
+- `plan/19_ui_drafts.md`: UI草案
+- `plan/20_execution_plan.md`: MVP実行提案
+- `plan/21_test_and_debug.md`: テストケース・デバッグ手順
+- `plan/22_pre_implementation.md`: 実装前固定仕様
+- `plan/23_ai_generation_design.md`: AI生成設計（イベント/契約/品質ガード）
+- `plan/24_character_samples.md`: キャラ生成サンプル（試作2名）
 - `plan/99_changelog.md`: 更新履歴
 
 ## 使い方

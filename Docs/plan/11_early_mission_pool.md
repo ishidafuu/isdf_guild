@@ -350,4 +350,4 @@
 - 地域帯と歴史: `06_regional_structure.md`
 - 依頼主と競合環境: `08_request_ecology.md`
 - ミッション基盤: `09_mission_framework.md`
-- 季節変動: `11_seasonal_dynamics.md`
+- 季節変動: `10_seasonal_dynamics.md`
