@@ -122,6 +122,69 @@ function getMissionDifficulty(mission: Mission): number {
   return typeof mission.difficulty === "number" ? mission.difficulty : mission.difficulty.target_number;
 }
 
+function getRewardText(mission: Mission): string {
+  const reward = mission.reward;
+  if (typeof reward === "string") {
+    return reward;
+  }
+  const chunks: string[] = [];
+  if (reward.currency) {
+    chunks.push(`${reward.currency}cr`);
+  }
+  if (reward.reputation) {
+    chunks.push("信用の上積み");
+  }
+  if (reward.resource_tags?.length) {
+    chunks.push(reward.resource_tags.join(" / "));
+  }
+  return chunks.join(" / ") || reward.summary;
+}
+
+function getRiskText(mission: Mission): string {
+  return typeof mission.risk === "string" ? mission.risk : mission.risk.summary;
+}
+
+function getResultLabel(result: Report["state_updates"] extends infer T
+  ? T extends { mission_result?: infer U }
+    ? U | "不明"
+    : "不明"
+  : "不明"): string {
+  switch (result) {
+    case "great_success":
+      return "大成功";
+    case "success":
+      return "成功";
+    case "partial_success":
+      return "部分成功";
+    case "failure":
+      return "失敗";
+    default:
+      return "不明";
+  }
+}
+
+function getMissionScaleText(mission: Mission): string {
+  const target = getMissionDifficulty(mission);
+  if (target <= 7) {
+    return "額は控えめだが、街の流れを止めないための仕事だ。";
+  }
+  if (target <= 8) {
+    return "そこそこの報酬がつく。軽く受けていい筋ではない。";
+  }
+  return "額が大きい。金額のぶんだけ、後で払うものも重い。";
+}
+
+function getConditionText(character: Character): string {
+  const { stress, injury } = character.status;
+  if (injury >= 2 || stress >= 3) {
+    return "立ってはいるが、無理を重ねたのが見て取れる。";
+  }
+  if (injury >= 1 || stress >= 2) {
+    return "返事はできる。ただ、疲れはまだ身体に残っている。";
+  }
+  return "表向きは静かだ。少なくとも今は、まだ切れていない。";
+}
+
 function cycleMission(direction: 1 | -1): void {
   const missions = getOpenMissions();
   if (missions.length === 0) return;
@@ -351,19 +414,28 @@ function getMissionShadow(mission: Mission): string {
 }
 
 function getCharacterReaction(character: Character, mission: Mission): string {
-  if (mission.category === "delivery" && character.role === "frontliner") {
-    return "短くうなずく。危険な搬送だとわかっていても、断る顔はしない。";
+  if (character.character_id === "char_shion") {
+    if (mission.category === "delivery") return "短くうなずく。危険な搬送でも、盾役が要るなら自分だという顔をする。";
+    if (mission.category === "recovery") return "表情は薄いが、企業区画と聞いた時だけ視線が少し硬くなる。";
+    return "言葉は少ない。だが断る時の間合いではない。";
   }
-  if (mission.category === "negotiation" && character.role === "negotiator") {
-    return "口元だけで笑う。面倒な仲裁ほど、自分の出番だと知っている顔だ。";
+  if (character.character_id === "char_mina") {
+    if (mission.category === "recovery") return "端末を閉じる指先がわずかに強い。企業絡みだと、皮肉が先に立つ。";
+    if (mission.category === "delivery") return "搬送経路の雑さを先に気にする。受けるなら準備は詰めたい顔だ。";
+    return "依頼人の名前を聞いた時にだけ、視線が少し冷える。";
   }
-  if (mission.category === "recovery" && character.role === "engineer") {
-    return "端末を閉じる音が少し強い。企業絡みだと機嫌は隠しきれない。";
+  if (character.character_id === "char_gai") {
+    if (mission.category === "negotiation") return "口元だけで笑う。面倒な仲裁ほど、自分の出番だと知っている顔だ。";
+    return "軽口を挟む余裕を見せる。余裕があるというより、そう見せる癖だ。";
   }
-  if (character.status.stress >= 2) {
-    return "返事はするが、目の下の色は薄くない。少し休ませる案も頭をよぎる。";
+  if (character.character_id === "char_nora") {
+    if (mission.category === "recovery") return "先に退路を気にしている。現場の匂いをまだ嗅いでいないのに、もう出口を探している。";
+    return "返事は小さい。だが嫌な予感を飲み込む時ほど、かえって静かになる。";
   }
-  return `${character.private_dossier?.speech_rule ?? character.public_digest}`;
+  if (character.character_id === "char_iza") {
+    return "すぐには断らない。誰かの穴を埋める形なら、なおさら引きにくい。";
+  }
+  return character.public_digest;
 }
 
 function renderSceneLines(lines: string[]): string {
@@ -382,7 +454,8 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
     advisor
       ? `${advisor.name}は帳面の端を指で弾き、端末に積まれた案件のうち一件だけをこちらへ寄せた。`
       : "古い端末の通知だけが、今日の仕事の気配を告げている。",
-    `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、難度は${getMissionDifficulty(mission)}。`,
+    `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、報酬は ${getRewardText(mission)}。`,
+    getMissionScaleText(mission),
   ];
 
   return `
@@ -393,6 +466,11 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
       ${
         advisor
           ? renderDialogueLine(advisor.name, getMissionLead(mission))
+          : ""
+      }
+      ${
+        advisor
+          ? renderDialogueLine(advisor.name, `見返りは ${getRewardText(mission)}。ただ、${getMissionShadow(mission)}`)
           : ""
       }
       <p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>
@@ -422,16 +500,34 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
       <h2>${mission.display_name} の段取り</h2>
       <p class="story-line">依頼の輪郭は見えた。ここからは、誰にこの仕事を持たせるかだ。</p>
       ${advisor ? renderDialogueLine(advisor.name, getMissionShadow(mission)) : ""}
-      <p class="story-line muted-line">選べるのは ${maxPartySize} 人まで。設備の段取りは裏でミレイが通す。</p>
+      <p class="story-line muted-line">多く連れて行けばいい仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。</p>
       <div class="scene-note">いま声をかけた顔ぶれ: ${selectedCharacters.length > 0 ? selectedCharacters.map((character) => character.name).join(" / ") : "まだ誰も呼んでいない"}</div>
+      ${
+        selectedCharacters.length > 0
+          ? `<div class="line-stack">${selectedCharacters
+              .map((character) => renderDialogueLine(character.name, getCharacterReaction(character, mission)))
+              .join("")}</div>`
+          : ""
+      }
     </div>
   `;
 }
 
 function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharacter | null): string {
   const result = preparedCycle.report.state_updates?.mission_result ?? "不明";
+  const resultLabel = getResultLabel(result);
+  const returningCharacters = preparedCycle.characters_after_report.filter((character) =>
+    preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
+  );
   const returnLines = [
-    `数時間後、扉が開く。戻ってきた空気は「${result}」の顔をしている。`,
+    result === "great_success"
+      ? "数時間後、扉が開く。空気は張っているが、崩れてはいない。"
+      : result === "success"
+        ? "扉が開く。片づいた仕事の顔をしているが、軽く終わった気配ではない。"
+        : result === "partial_success"
+          ? "戻ってきた靴音に、少しだけ重さがある。片づいたものと残ったものが半端に混じっている。"
+          : "扉が開いた瞬間、先に伝わるのは結果より消耗だ。",
+    `今夜の帳面に残る評価は「${resultLabel}」。`,
     preparedCycle.report.text,
     ...(preparedCycle.report.summary_lines ?? []),
   ];
@@ -441,6 +537,26 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
       <div class="scene-label">帰還後</div>
       <h2>${preparedCycle.mission.display_name}</h2>
       ${renderSceneLines(returnLines)}
+      <div class="line-stack">
+        ${returningCharacters
+          .map((character) =>
+            renderDialogueLine(
+              character.name,
+              `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`
+            )
+          )
+          .join("")}
+      </div>
+      ${
+        advisor
+          ? renderDialogueLine(
+              advisor.name,
+              result === "failure"
+                ? "結果は結果だ。まず座らせる。話はそのあとでいい。"
+                : "数字より先に顔を見る。うまくいったなら、なおさらね。"
+            )
+          : ""
+      }
       ${
         preparedCycle.dispatch.risk_view?.staff_lines?.length
           ? `<div class="line-stack">${preparedCycle.dispatch.risk_view.staff_lines
@@ -471,7 +587,7 @@ function renderRoster(mission: Mission): string {
             <span class="tag">${character.role}</span>
           </div>
           <p>${selected ? "声をかけた。" : "まだ呼んでいない。"} ${getCharacterReaction(character, mission)}</p>
-          <div class="small muted">負傷 ${character.status.injury} / ストレス ${character.status.stress} / 上限 ${maxPartySize} 人</div>
+          <div class="small muted">${getConditionText(character)} / 顔ぶれは ${maxPartySize} 人まで</div>
         </button>
       `;
     })
@@ -534,7 +650,9 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
               <div class="scene-label">今日の案件</div>
               <h3>${mission.display_name}</h3>
               <p>${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>
-              <div class="small muted">依頼人: ${getMissionClientName(mission)} / 難度 ${getMissionDifficulty(mission)}</div>
+              <div class="small muted">依頼人: ${getMissionClientName(mission)}</div>
+              <div class="scene-note">報酬: ${getRewardText(mission)}</div>
+              <p class="small muted">${getRiskText(mission)}</p>
             </section>`
           : ""
       }
@@ -646,8 +764,8 @@ function render(): void {
           <p>${uiState.state.world_pack.one_liner}</p>
         </div>
         <div class="top-meta">
-          <div class="small muted">記録 ${uiState.state.reports.length} 件</div>
-          <div class="small muted">open ${getOpenMissions().length} 件</div>
+          <div class="small muted">空気: ${uiState.state.base.state_values?.atmosphere ?? "unknown"}</div>
+          <div class="small muted">外からの視線: ${uiState.state.base.state_values?.external_attention ?? "unknown"}</div>
         </div>
       </header>
 
