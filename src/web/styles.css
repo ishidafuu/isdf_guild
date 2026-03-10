@@ -146,6 +146,14 @@ button:disabled {
   padding: 16px;
 }
 
+button.mission-card,
+button.character-card {
+  width: 100%;
+  color: #e8ecf1;
+  text-align: left;
+  font-weight: 600;
+}
+
 .mission-card.selected,
 .character-card.selected,
 .note-card.selected {
