@@ -28,12 +28,45 @@ function buildLinkedNotes(input: {
   }));
 }
 
+function buildAftertasteLine(input: {
+  mission: Mission;
+  dispatch: Dispatch;
+  resolution: MissionResolution;
+}): string | null {
+  const concerns = input.dispatch.risk_view?.concerns ?? [];
+  const topConcern = concerns[0];
+
+  if (input.resolution.mission_result === "great_success" && topConcern) {
+    return `表向きは綺麗に片付いたが、${topConcern}という感触は残った。`;
+  }
+
+  if (input.resolution.mission_result === "success" && topConcern) {
+    return `達成はしたが、${topConcern}という違和感までは消えていない。`;
+  }
+
+  if (
+    (input.resolution.mission_result === "partial_success" || input.resolution.mission_result === "failure") &&
+    typeof input.mission.client !== "string" &&
+    input.mission.client.type === "faction"
+  ) {
+    return `${input.mission.client.name}との間には、結果以上の引っかかりが残った。`;
+  }
+
+  return null;
+}
+
 export function buildReport(input: {
   mission: Mission;
   dispatch: Dispatch;
   resolution: MissionResolution;
   sequence: number;
 }): Report {
+  const aftertasteLine = buildAftertasteLine(input);
+  const text = aftertasteLine ? `${input.resolution.summary} ${aftertasteLine}` : input.resolution.summary;
+  const summaryLines = aftertasteLine
+    ? [...input.resolution.summary_lines.slice(0, 2), aftertasteLine]
+    : input.resolution.summary_lines;
+
   return {
     report_id: formatSequenceId("report", input.sequence) as Report["report_id"],
     mission_id: input.mission.mission_id,
@@ -41,10 +74,10 @@ export function buildReport(input: {
     world_pack_id: input.mission.world_pack_id,
     kind: "mission_report",
     phase: "post_mission",
-    text: input.resolution.summary,
+    text,
     intent_tags: input.resolution.intent_tags,
     reason_summary: input.resolution.reason_summary,
-    summary_lines: input.resolution.summary_lines,
+    summary_lines: summaryLines,
     fact_log: {
       outcome: input.resolution.mission_result,
       reward_change: input.resolution.reward_change,
