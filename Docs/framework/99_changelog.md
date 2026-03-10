@@ -37,3 +37,4 @@
 - `01_framework_spec.md` と `02_world_pack_template.md` に、物語トーンを固定せず、開始時設定・作者設定・ランダム生成で可変にする方針を追記
 - `01_framework_spec.md` と `08_review_notes.md` に、データテーブル化前提、AI 主導運用、世界観入口のみ人間が固定、ソロプレイ前提の方針を追記
 - `09_questions_for_user.md` の実装・運用関連を確定済み内容に更新
+- `00_one_pager.md`、`01_framework_spec.md`、`09_questions_for_user.md` に、主役を全体の物語とする方針、避けたい失敗を作業化とする方針、多世界前提寄りの整理を追記
