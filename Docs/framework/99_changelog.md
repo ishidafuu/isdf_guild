@@ -26,3 +26,4 @@
 - `01_framework_spec.md` と `04_character_framework.md` に、成長の主役をキャラクター同士の物語とし、ギルド拡張を任意の成長軸とする方針を追記
 - `04_character_framework.md` に、成長要素へ強い優先順位を付けすぎず、信頼関係と立場の変化を自然に前面化する方針を追記
 - `01_framework_spec.md` と `04_character_framework.md` に、死亡や引退などの恒久損失をゲーム開始時の設定項目として切り替える方針を追記
+- `01_framework_spec.md` と `04_character_framework.md` に、負傷やストレスをセッションをまたいで持ち越す前提を追記
