@@ -5,6 +5,9 @@
 この文書は、現行仕様のキャラクター情報を実装用 JSON へ落とす際の叩き台を置く。
 ここでいう JSON は厳密スキーマではなく、今の仕様を崩さず実装へ近づけるための案である。
 
+補足:
+キー名や ID の付け方は `07_JSON命名規則とID規則.md` に従う。
+
 ## 1. 方針
 
 - 表示用要約と内部設定を分ける
@@ -92,7 +95,7 @@
   },
   "guildmaster_note_log": [
     {
-      "note_id": "gmn_0001",
+      "note_id": "note_0001",
       "selected_text": "痛みを隠しているが、次も前に出たがるタイプだ。",
       "user_note": "しばらく単独前衛は避けたい。",
       "source_kind": "mission_report",
@@ -121,12 +124,12 @@
   },
   "timeline": [
     {
-      "event_id": "te_0001",
+      "event_id": "timeline_event_0001",
       "kind": "backstory",
       "summary": "護衛失敗で守れなかった経験を持つ。"
     },
     {
-      "event_id": "te_0002",
+      "event_id": "timeline_event_0002",
       "kind": "mission_aftermath",
       "summary": "旧港倉庫の護送任務で肩を負傷。港湾商会への印象も悪化。"
     }

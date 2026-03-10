@@ -5,6 +5,9 @@
 この文書は、現行仕様の日報構造を実装用 JSON へ落とす際の叩き台を置く。
 日報の文例自体は `03_日報出力サンプル.md` を参照し、この文書ではデータ構造に寄せて整理する。
 
+補足:
+キー名や ID の付け方は `07_JSON命名規則とID規則.md` に従う。
+
 ## 1. 方針
 
 - 日報はまず事実ログを残す
@@ -90,7 +93,7 @@
   "linked_notes": [
     {
       "character_id": "char_shion",
-      "note_candidate_set_id": "gmnset_0001"
+      "note_candidate_set_id": "note_candidate_set_0001"
     }
   ]
 }
