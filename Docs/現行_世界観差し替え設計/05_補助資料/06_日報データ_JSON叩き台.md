@@ -36,7 +36,7 @@
   "report_id": "report_0001",
   "mission_id": "mission_0007",
   "dispatch_id": "dispatch_0001",
-  "world_pack_id": "fantasy_base",
+  "world_pack_id": "world_pack_fantasy_base",
   "kind": "mission_report",
   "phase": "post_mission",
   "text": "旧港倉庫での封印箱護送は部分成功。箱は指定先へ届いたが、帰路でシオンが肩を負傷。港湾商会は任務達成自体は評価したものの、輸送経路の判断には不満を残した。",

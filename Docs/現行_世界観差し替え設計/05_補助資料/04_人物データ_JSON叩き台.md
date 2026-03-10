@@ -22,7 +22,7 @@
   "character_id": "char_0001",
   "name": "シオン",
   "member_kind": "adventurer",
-  "world_pack_id": "fantasy_base",
+  "world_pack_id": "world_pack_fantasy_base",
   "role": "frontliner",
   "stats": {
     "power": 2,
@@ -48,7 +48,7 @@
   "character_id": "char_0001",
   "name": "シオン",
   "member_kind": "adventurer",
-  "world_pack_id": "fantasy_base",
+  "world_pack_id": "world_pack_fantasy_base",
   "role": "frontliner",
   "sub_roles": ["scout"],
   "stats": {

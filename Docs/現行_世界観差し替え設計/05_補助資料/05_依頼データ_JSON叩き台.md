@@ -20,13 +20,18 @@
 ```json
 {
   "mission_id": "mission_0007",
-  "world_pack_id": "fantasy_base",
+  "world_pack_id": "world_pack_fantasy_base",
   "category": "delivery",
   "client": "港湾商会",
   "target": "封印箱",
   "location": "旧港倉庫",
   "objective": "指定先へ安全に搬送する",
-  "obstacle": "帰路の襲撃",
+  "obstacles": [
+    {
+      "kind": "ambush",
+      "summary": "帰路で襲撃の可能性がある"
+    }
+  ],
   "time_limit": "夜明けまで",
   "reward": "金銭と港湾商会からの信用",
   "risk": "報酬減少と関係悪化",
@@ -40,13 +45,13 @@
 ```json
 {
   "mission_id": "mission_0007",
-  "world_pack_id": "fantasy_base",
+  "world_pack_id": "world_pack_fantasy_base",
   "category": "delivery",
   "display_name": "封印箱護送",
   "category_display": "輸送",
   "client": {
     "type": "faction",
-    "id": "faction_port_union",
+    "faction_id": "faction_port_union",
     "name": "港湾商会"
   },
   "target": {
@@ -125,7 +130,7 @@
 - `objective`
   - 成功条件の要約
 - `obstacles`
-  - 主な障害
+  - 主な障害。単数形の `obstacle` は使わず、常に配列で持つ
 - `time_limit`
   - 期限や時間圧
 - `reward`
@@ -174,10 +179,13 @@
 - `target`
 - `location`
 - `objective`
-- `obstacle` または `obstacles`
+- `obstacles`
 - `reward`
 - `risk`
 - `difficulty`
 - `tags`
 
 `twist`、`participants`、`state` は後から拡張してもよい。
+
+補足:
+`obstacles` は 1 件だけでも配列で持ち、正準形を 1 つに揃える。
