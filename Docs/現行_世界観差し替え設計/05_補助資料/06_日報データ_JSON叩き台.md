@@ -21,6 +21,7 @@
 {
   "report_id": "report_0001",
   "mission_id": "mission_0007",
+  "dispatch_id": "dispatch_0001",
   "kind": "mission_report",
   "text": "封印箱護送は部分成功。目的物は届いたが、護衛役の一人が負傷した。",
   "intent_tags": ["依頼結果", "部分成功", "負傷発生"],
@@ -34,6 +35,7 @@
 {
   "report_id": "report_0001",
   "mission_id": "mission_0007",
+  "dispatch_id": "dispatch_0001",
   "world_pack_id": "fantasy_base",
   "kind": "mission_report",
   "phase": "post_mission",
@@ -149,6 +151,7 @@
 
 - `report_id`
 - `mission_id`
+- `dispatch_id`
 - `kind`
 - `text`
 - `intent_tags`
