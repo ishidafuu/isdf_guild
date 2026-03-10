@@ -30,3 +30,4 @@
 - `01_framework_spec.md` と `04_character_framework.md` に、個人成長とギルド成長のどちらも過度に主役化せず、ゆるやかな変化として扱う方針を追記
 - `01_framework_spec.md` と `02_world_pack_template.md` に、初期ワールド本数を固定せず、代表パックで試してから段階的に追加する方針を追記
 - `01_framework_spec.md` と `02_world_pack_template.md` に、王道ファンタジーを並列候補として扱う方針、世界観を完全に別世界とする方針、プレイ感差の許容範囲、固有特技と固有資源の広い許容方針を追記
+- `01_framework_spec.md` と `03_request_category_tables.md` に、依頼カテゴリ8種維持、完全ランダム生成志向、日常依頼の許容、余波の案件依存、関係による案件変質強化の方針を追記
