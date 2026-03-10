@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import { generateGuildmasterNotesViaCodexCli } from "./src/ai_contracts/guildmaster_note/generate";
 import { generateReportViaCodexCli } from "./src/ai_contracts/report/generate";
+import { generateSceneTextViaCodexCli } from "./src/ai_contracts/scene/generate";
 import type {
   GuildmasterNoteGenerationRequest,
   ReportGenerationRequest,
+  SceneGenerationRequest,
 } from "./src/ai_runtime/types";
 
 export default defineConfig({
@@ -44,6 +46,22 @@ export default defineConfig({
               { error: error instanceof Error ? error.message : "guildmaster note route failed" },
               500
             );
+          }
+        });
+
+        server.middlewares.use("/api/ai/scene", async (req, res) => {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.end("Method Not Allowed");
+            return;
+          }
+
+          try {
+            const body = (await readJsonBody(req)) as SceneGenerationRequest;
+            const payload = await generateSceneTextViaCodexCli(body);
+            sendJson(res, payload);
+          } catch (error) {
+            sendJson(res, { error: error instanceof Error ? error.message : "scene route failed" }, 500);
           }
         });
       },

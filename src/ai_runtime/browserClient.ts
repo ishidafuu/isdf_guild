@@ -3,6 +3,8 @@ import type {
   GuildmasterNoteGenerationResponse,
   ReportGenerationRequest,
   ReportGenerationResponse,
+  SceneGenerationRequest,
+  SceneGenerationResponse,
 } from "./types";
 
 async function postJson<TResponse>(url: string, body: unknown): Promise<TResponse> {
@@ -31,4 +33,10 @@ export async function requestAiGuildmasterNotes(
   request: GuildmasterNoteGenerationRequest
 ): Promise<GuildmasterNoteGenerationResponse> {
   return await postJson<GuildmasterNoteGenerationResponse>("/api/ai/guildmaster-note", request);
+}
+
+export async function requestAiScene(
+  request: SceneGenerationRequest
+): Promise<SceneGenerationResponse> {
+  return await postJson<SceneGenerationResponse>("/api/ai/scene", request);
 }

@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +12,11 @@ type CodexCliInvocation = {
 };
 
 export async function runCodexCliJson<T>(input: CodexCliInvocation): Promise<T> {
+  const cached = await readCachedJson<T>(input);
+  if (cached) {
+    return cached;
+  }
+
   const tempDir = await mkdtemp(join(tmpdir(), "isdf-guild-codex-"));
   const schemaPath = join(tempDir, "schema.json");
   const outputPath = join(tempDir, "output.json");
@@ -25,13 +31,41 @@ export async function runCodexCliJson<T>(input: CodexCliInvocation): Promise<T> 
     });
 
     const raw = await readFile(outputPath, "utf-8");
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw) as T;
+    await writeCachedJson(input, parsed);
+    return parsed;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`codex CLI 実行に失敗しました: ${message}`);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function readCachedJson<T>(input: CodexCliInvocation): Promise<T | null> {
+  const cachePath = buildCachePath(input);
+  try {
+    const raw = await readFile(cachePath, "utf-8");
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedJson<T>(input: CodexCliInvocation, payload: T): Promise<void> {
+  const cacheDir = join(process.cwd(), ".cache", "codex_cli");
+  await mkdir(cacheDir, { recursive: true });
+  await writeFile(buildCachePath(input), JSON.stringify(payload), "utf-8");
+}
+
+function buildCachePath(input: CodexCliInvocation): string {
+  const cacheDir = join(process.cwd(), ".cache", "codex_cli");
+  const hashBuilder = createHash("sha1");
+  hashBuilder.update(JSON.stringify(input.schema));
+  hashBuilder.update("\n");
+  hashBuilder.update(input.prompt);
+  const hash = hashBuilder.digest("hex");
+  return join(cacheDir, `${hash}.json`);
 }
 
 async function spawnCodex(input: {

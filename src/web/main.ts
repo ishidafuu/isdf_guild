@@ -19,7 +19,8 @@ import { buildSnapshot } from "../core/mission_flow/buildSnapshot";
 import { createStorageV2Data } from "../storage_v2/schema";
 import { stateToStorageData, storageDataToState } from "../storage_v2/transaction";
 import type { MissionCycleState, NoteCandidateSet, PreMissionConversation } from "../core/mission_flow/types";
-import { requestAiGuildmasterNotes, requestAiReport } from "../ai_runtime/browserClient";
+import { requestAiGuildmasterNotes, requestAiReport, requestAiScene } from "../ai_runtime/browserClient";
+import type { SceneGenerationRequest, SceneTextPack } from "../ai_runtime/types";
 
 const STORAGE_KEY = "isdf_guild_web_state_v1";
 
@@ -48,6 +49,9 @@ type UiState = {
     provider?: "codex_cli" | "fallback";
     warning?: string;
   };
+  sceneTextCache: Record<string, SceneTextPack | undefined>;
+  sceneTextWarnings: Record<string, string | undefined>;
+  sceneTextLoadingKeys: string[];
 };
 
 function initializeState(): MissionCycleState {
@@ -94,6 +98,9 @@ function createDefaultUiState(): UiState {
     selectedNotes: {},
     userNotes: {},
     aiStatus: undefined,
+    sceneTextCache: {},
+    sceneTextWarnings: {},
+    sceneTextLoadingKeys: [],
   };
 }
 
@@ -250,6 +257,9 @@ function resetGame(): void {
   uiState.selectedNotes = reset.selectedNotes;
   uiState.userNotes = reset.userNotes;
   uiState.aiStatus = undefined;
+  uiState.sceneTextCache = {};
+  uiState.sceneTextWarnings = {};
+  uiState.sceneTextLoadingKeys = [];
   render();
 }
 
@@ -459,6 +469,50 @@ function confirmCycle(): void {
   render();
 }
 
+function getBriefingSceneKey(mission: Mission): string {
+  return `briefing:${mission.mission_id}`;
+}
+
+function getCastingSceneKey(mission: Mission): string {
+  const memberKey = [...uiState.selectedCharacterIds].sort().join(",");
+  return `casting:${mission.mission_id}:${memberKey}`;
+}
+
+function getAftermathSceneKey(preparedCycle: PreparedCycle): string {
+  return `aftermath:${preparedCycle.report.report_id}`;
+}
+
+function isSceneLoading(key: string): boolean {
+  return uiState.sceneTextLoadingKeys.includes(key);
+}
+
+function getCachedScenePack(key: string): SceneTextPack | undefined {
+  return uiState.sceneTextCache[key];
+}
+
+async function ensureSceneText(input: { key: string; request: SceneGenerationRequest }): Promise<void> {
+  if (uiState.sceneTextCache[input.key] || isSceneLoading(input.key)) {
+    return;
+  }
+
+  uiState.sceneTextLoadingKeys = [...uiState.sceneTextLoadingKeys, input.key];
+  render();
+
+  try {
+    const response = await requestAiScene(input.request);
+    uiState.sceneTextCache[input.key] = response.output;
+    if (response.meta.warning) {
+      uiState.sceneTextWarnings[input.key] = response.meta.warning;
+    }
+  } catch (error) {
+    uiState.sceneTextWarnings[input.key] =
+      error instanceof Error ? error.message : "scene AI 接続に失敗しました。";
+  } finally {
+    uiState.sceneTextLoadingKeys = uiState.sceneTextLoadingKeys.filter((key) => key !== input.key);
+    render();
+  }
+}
+
 function getRecentNotes(limit = 3): string[] {
   return uiState.state.guildmaster_notes
     .slice(-limit)
@@ -515,6 +569,98 @@ function getCharacterReaction(character: Character, mission: Mission): string {
   return character.public_digest;
 }
 
+function buildBriefingFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+  const alternatives = getOpenMissions().filter((entry) => entry.mission_id !== mission.mission_id);
+  const recentNotes = getRecentNotes(1);
+
+  return {
+    narration_lines: [
+      `${uiState.state.base.summary}。換気扇の音が低く回り、夜勤明けの湿気がまだ部屋に残っている。`,
+      advisor
+        ? `${advisor.name}は帳面の端を指で弾き、端末に積まれた案件のうち一件だけをこちらへ寄せた。`
+        : "古い端末の通知だけが、今日の仕事の気配を告げている。",
+      `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、報酬は ${getRewardText(mission)}。`,
+      getMissionScaleText(mission),
+    ],
+    advisor_lines: advisor
+      ? [getMissionLead(mission), `見返りは ${getRewardText(mission)}。ただ、${getMissionShadow(mission)}`]
+      : [],
+    aside_lines: [
+      ...(alternatives.length > 0
+        ? [`ほかにも ${alternatives.length} 件、保留の案件がある。${alternatives[0]?.display_name ?? ""} もまだ残っている。`]
+        : []),
+      ...(recentNotes.length > 0 ? [`昨夜のメモ: ${recentNotes[0]}`] : []),
+    ],
+    character_lines: [],
+  };
+}
+
+function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+  const maxPartySize = mission.participants?.max_party_size ?? 3;
+  const selectedCharacters = getAvailableCharacters().filter((character) =>
+    uiState.selectedCharacterIds.includes(character.character_id)
+  );
+  const availableCharacters = getAvailableCharacters();
+
+  return {
+    narration_lines: [
+      "依頼の輪郭は見えた。ここからは、誰にこの仕事を持たせるかだ。",
+      `多く連れて行けばいい仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。`,
+    ],
+    advisor_lines: advisor ? [getMissionShadow(mission)] : [],
+    aside_lines: [
+      `いま声をかけた顔ぶれ: ${
+        selectedCharacters.length > 0 ? selectedCharacters.map((character) => character.name).join(" / ") : "まだ誰も呼んでいない"
+      }`,
+    ],
+    character_lines: availableCharacters.map((character) => ({
+      character_id: character.character_id,
+      text: getCharacterReaction(character, mission),
+    })),
+  };
+}
+
+function buildAftermathFallbackPack(preparedCycle: PreparedCycle, advisor: StaffCharacter | null): SceneTextPack {
+  const result = preparedCycle.report.state_updates?.mission_result ?? "不明";
+  const resultLabel = getResultLabel(result);
+  const returningCharacters = preparedCycle.characters_after_report.filter((character) =>
+    preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
+  );
+
+  return {
+    narration_lines: [
+      result === "great_success"
+        ? "数時間後、扉が開く。空気は張っているが、崩れてはいない。"
+        : result === "success"
+          ? "扉が開く。片づいた仕事の顔をしているが、軽く終わった気配ではない。"
+          : result === "partial_success"
+            ? "戻ってきた靴音に、少しだけ重さがある。片づいたものと残ったものが半端に混じっている。"
+            : "扉が開いた瞬間、先に伝わるのは結果より消耗だ。",
+      `今夜の帳面に残る評価は「${resultLabel}」。`,
+      preparedCycle.report.text,
+      ...(preparedCycle.report.summary_lines ?? []),
+    ],
+    advisor_lines: advisor
+      ? [
+          result === "failure"
+            ? "結果は結果だ。まず座らせる。話はそのあとでいい。"
+            : "数字より先に顔を見る。うまくいったなら、なおさらね。",
+        ]
+      : [],
+    aside_lines: preparedCycle.dispatch.risk_view?.staff_lines?.length
+      ? preparedCycle.dispatch.risk_view.staff_lines
+      : preparedCycle.pre_mission_conversation.map((line) => `${line.speaker_name}「${line.text}」`),
+    character_lines: returningCharacters.map((character) => ({
+      character_id: character.character_id,
+      text: `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`,
+    })),
+  };
+}
+
+function getSceneCharacterLine(scenePack: SceneTextPack | undefined, characterId: Character["character_id"]): string | null {
+  return scenePack?.character_lines.find((line) => line.character_id === characterId)?.text ?? null;
+}
+
 function renderSceneLines(lines: string[]): string {
   return lines.map((line) => `<p class="story-line">${line}</p>`).join("");
 }
@@ -524,130 +670,89 @@ function renderDialogueLine(speaker: string, text: string): string {
 }
 
 function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): string {
-  const alternatives = getOpenMissions().filter((entry) => entry.mission_id !== mission.mission_id);
-  const recentNotes = getRecentNotes(1);
-  const lines = [
-    `${uiState.state.base.summary}。換気扇の音が低く回り、夜勤明けの湿気がまだ部屋に残っている。`,
-    advisor
-      ? `${advisor.name}は帳面の端を指で弾き、端末に積まれた案件のうち一件だけをこちらへ寄せた。`
-      : "古い端末の通知だけが、今日の仕事の気配を告げている。",
-    `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、報酬は ${getRewardText(mission)}。`,
-    getMissionScaleText(mission),
-  ];
+  const sceneKey = getBriefingSceneKey(mission);
+  const fallbackPack = buildBriefingFallbackPack(mission, advisor);
+  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
+  const warning = uiState.sceneTextWarnings[sceneKey];
 
   return `
     <div class="story-card">
       <div class="scene-label">朝の机</div>
       <h2>${mission.display_name}</h2>
-      ${renderSceneLines(lines)}
+      ${renderSceneLines(scenePack.narration_lines)}
       ${
-        advisor
-          ? renderDialogueLine(advisor.name, getMissionLead(mission))
-          : ""
+        advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""
       }
       ${
-        advisor
-          ? renderDialogueLine(advisor.name, `見返りは ${getRewardText(mission)}。ただ、${getMissionShadow(mission)}`)
-          : ""
+        scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")
       }
       <p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>
-      ${
-        alternatives.length > 0
-          ? `<div class="scene-note">ほかにも ${alternatives.length} 件、保留の案件がある。${alternatives[0]?.display_name ?? ""} もまだ残っている。</div>`
-          : ""
-      }
-      ${
-        recentNotes.length > 0
-          ? `<div class="scene-note">昨夜のメモ: ${recentNotes[0]}</div>`
-          : ""
-      }
+      ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
 }
 
 function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): string {
-  const maxPartySize = mission.participants?.max_party_size ?? 3;
+  const sceneKey = getCastingSceneKey(mission);
+  const fallbackPack = buildCastingFallbackPack(mission, advisor);
+  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
+  const warning = uiState.sceneTextWarnings[sceneKey];
 
   return `
     <div class="story-card">
       <div class="scene-label">声をかける</div>
       <h2>${mission.display_name} の段取り</h2>
-      <p class="story-line">依頼の輪郭は見えた。ここからは、誰にこの仕事を持たせるかだ。</p>
-      ${advisor ? renderDialogueLine(advisor.name, getMissionShadow(mission)) : ""}
-      <p class="story-line muted-line">多く連れて行けばいい仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。</p>
-      <div class="scene-note">いま声をかけた顔ぶれ: ${selectedCharacters.length > 0 ? selectedCharacters.map((character) => character.name).join(" / ") : "まだ誰も呼んでいない"}</div>
+      ${renderSceneLines(scenePack.narration_lines)}
+      ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
+      ${scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")}
       ${
         selectedCharacters.length > 0
           ? `<div class="line-stack">${selectedCharacters
-              .map((character) => renderDialogueLine(character.name, getCharacterReaction(character, mission)))
+              .map((character) =>
+                renderDialogueLine(
+                  character.name,
+                  getSceneCharacterLine(scenePack, character.character_id) ?? getCharacterReaction(character, mission)
+                )
+              )
               .join("")}</div>`
           : ""
       }
+      ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
 }
 
 function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharacter | null): string {
-  const result = preparedCycle.report.state_updates?.mission_result ?? "不明";
-  const resultLabel = getResultLabel(result);
+  const sceneKey = getAftermathSceneKey(preparedCycle);
+  const fallbackPack = buildAftermathFallbackPack(preparedCycle, advisor);
+  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
   const returningCharacters = preparedCycle.characters_after_report.filter((character) =>
     preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
   );
-  const returnLines = [
-    result === "great_success"
-      ? "数時間後、扉が開く。空気は張っているが、崩れてはいない。"
-      : result === "success"
-        ? "扉が開く。片づいた仕事の顔をしているが、軽く終わった気配ではない。"
-        : result === "partial_success"
-          ? "戻ってきた靴音に、少しだけ重さがある。片づいたものと残ったものが半端に混じっている。"
-          : "扉が開いた瞬間、先に伝わるのは結果より消耗だ。",
-    `今夜の帳面に残る評価は「${resultLabel}」。`,
-    preparedCycle.report.text,
-    ...(preparedCycle.report.summary_lines ?? []),
-  ];
+  const warning = uiState.sceneTextWarnings[sceneKey];
 
   return `
     <div class="story-card">
       <div class="scene-label">帰還後</div>
       <h2>${preparedCycle.mission.display_name}</h2>
-      ${renderSceneLines(returnLines)}
+      ${renderSceneLines(scenePack.narration_lines)}
       <div class="line-stack">
         ${returningCharacters
           .map((character) =>
             renderDialogueLine(
               character.name,
-              `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`
+              getSceneCharacterLine(scenePack, character.character_id) ??
+                `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`
             )
           )
           .join("")}
       </div>
-      ${
-        advisor
-          ? renderDialogueLine(
-              advisor.name,
-              result === "failure"
-                ? "結果は結果だ。まず座らせる。話はそのあとでいい。"
-                : "数字より先に顔を見る。うまくいったなら、なおさらね。"
-            )
-          : ""
-      }
-      ${
-        preparedCycle.dispatch.risk_view?.staff_lines?.length
-          ? `<div class="line-stack">${preparedCycle.dispatch.risk_view.staff_lines
-              .map((line) => `<div class="echo-line">${line}</div>`)
-              .join("")}</div>`
-          : ""
-      }
-      ${
-        !advisor && preparedCycle.pre_mission_conversation.length > 0
-          ? `<div class="line-stack">${preparedCycle.pre_mission_conversation
-              .map((line) => `<div class="echo-line">${line.speaker_name}「${line.text}」</div>`)
-              .join("")}</div>`
-          : ""
-      }
+      ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
+      ${scenePack.aside_lines.length > 0 ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>` : ""}
+      ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
 }
@@ -655,6 +760,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
 function renderRoster(mission: Mission): string {
   const maxPartySize = mission.participants?.max_party_size ?? 3;
   const disabled = uiState.aiStatus?.loading ? "disabled" : "";
+  const scenePack = getCachedScenePack(getCastingSceneKey(mission));
   return getAvailableCharacters()
     .map((character) => {
       const selected = uiState.selectedCharacterIds.includes(character.character_id);
@@ -664,7 +770,9 @@ function renderRoster(mission: Mission): string {
             <strong>${character.name}</strong>
             <span class="tag">${character.role}</span>
           </div>
-          <p>${selected ? "声をかけた。" : "まだ呼んでいない。"} ${getCharacterReaction(character, mission)}</p>
+          <p>${selected ? "声をかけた。" : "まだ呼んでいない。"} ${
+            getSceneCharacterLine(scenePack, character.character_id) ?? getCharacterReaction(character, mission)
+          }</p>
           <div class="small muted">${getConditionText(character)} / 顔ぶれは ${maxPartySize} 人まで</div>
         </button>
       `;
@@ -832,6 +940,105 @@ function renderMainStage(): string {
   `;
 }
 
+function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerationRequest } | null {
+  const mission = getSelectedMission();
+  const advisor = getAdvisor();
+
+  if (!mission) {
+    return null;
+  }
+
+  if (uiState.scene === "briefing") {
+    const fallback = buildBriefingFallbackPack(mission, advisor);
+    return {
+      key: getBriefingSceneKey(mission),
+      request: {
+        stage: "briefing",
+        mission,
+        advisor: advisor
+          ? {
+              character_id: advisor.character_id,
+              name: advisor.name,
+              public_digest: advisor.public_digest,
+              volatile_hook: advisor.volatile_hook,
+            }
+          : null,
+        characters: [],
+        reward_text: getRewardText(mission),
+        risk_text: getRiskText(mission),
+        recent_notes: getRecentNotes(2),
+        recent_reports: getRecentReports(2).map((report) => report.text),
+        fallback,
+      },
+    };
+  }
+
+  if (uiState.scene === "casting") {
+    const fallback = buildCastingFallbackPack(mission, advisor);
+    return {
+      key: getCastingSceneKey(mission),
+      request: {
+        stage: "casting",
+        mission,
+        advisor: advisor
+          ? {
+              character_id: advisor.character_id,
+              name: advisor.name,
+              public_digest: advisor.public_digest,
+              volatile_hook: advisor.volatile_hook,
+            }
+          : null,
+        characters: getAvailableCharacters().map((character) => ({
+          character_id: character.character_id,
+          name: character.name,
+          role: character.role,
+          public_digest: character.public_digest,
+          volatile_hook: character.volatile_hook,
+          condition_text: getConditionText(character),
+        })),
+        reward_text: getRewardText(mission),
+        risk_text: getRiskText(mission),
+        fallback,
+      },
+    };
+  }
+
+  if (uiState.scene === "aftermath" && uiState.preparedCycle) {
+    const fallback = buildAftermathFallbackPack(uiState.preparedCycle, advisor);
+    return {
+      key: getAftermathSceneKey(uiState.preparedCycle),
+      request: {
+        stage: "aftermath",
+        mission,
+        advisor: advisor
+          ? {
+              character_id: advisor.character_id,
+              name: advisor.name,
+              public_digest: advisor.public_digest,
+              volatile_hook: advisor.volatile_hook,
+            }
+          : null,
+        characters: uiState.preparedCycle.characters_after_report
+          .filter((character) => uiState.preparedCycle?.dispatch.assigned_character_ids.includes(character.character_id))
+          .map((character) => ({
+            character_id: character.character_id,
+            name: character.name,
+            role: character.role,
+            public_digest: character.public_digest,
+            volatile_hook: character.volatile_hook,
+            condition_text: getConditionText(character),
+          })),
+        report: uiState.preparedCycle.report,
+        reward_text: getRewardText(mission),
+        risk_text: getRiskText(mission),
+        fallback,
+      },
+    };
+  }
+
+  return null;
+}
+
 function render(): void {
   const mission = getSelectedMission();
 
@@ -895,6 +1102,11 @@ function render(): void {
       uiState.userNotes[textarea.dataset.setId ?? ""] = textarea.value;
     });
   });
+
+  const sceneRequest = buildSceneRequestForCurrentView();
+  if (sceneRequest) {
+    void ensureSceneText(sceneRequest);
+  }
 }
 
 render();

@@ -38,3 +38,45 @@ export type GuildmasterNoteCandidateGeneration = {
   output: GuildmasterNoteAiOutput;
   meta: AiGenerationMeta;
 };
+
+export type SceneStage = "briefing" | "casting" | "aftermath";
+
+export type SceneTextPack = {
+  narration_lines: string[];
+  advisor_lines: string[];
+  aside_lines: string[];
+  character_lines: Array<{
+    character_id: Character["character_id"];
+    text: string;
+  }>;
+};
+
+export type SceneGenerationRequest = {
+  stage: SceneStage;
+  mission: Mission;
+  advisor?: {
+    character_id: Character["character_id"];
+    name: string;
+    public_digest?: string;
+    volatile_hook?: string;
+  } | null;
+  characters: Array<{
+    character_id: Character["character_id"];
+    name: string;
+    role: Character["role"];
+    public_digest: Character["public_digest"];
+    volatile_hook?: Character["volatile_hook"];
+    condition_text?: string;
+  }>;
+  report?: Report;
+  reward_text?: string;
+  risk_text?: string;
+  recent_notes?: string[];
+  recent_reports?: string[];
+  fallback: SceneTextPack;
+};
+
+export type SceneGenerationResponse = {
+  output: SceneTextPack;
+  meta: AiGenerationMeta;
+};
