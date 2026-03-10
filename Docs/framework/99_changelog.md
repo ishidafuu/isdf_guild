@@ -27,3 +27,4 @@
 - `04_character_framework.md` に、成長要素へ強い優先順位を付けすぎず、信頼関係と立場の変化を自然に前面化する方針を追記
 - `01_framework_spec.md` と `04_character_framework.md` に、死亡や引退などの恒久損失をゲーム開始時の設定項目として切り替える方針を追記
 - `01_framework_spec.md` と `04_character_framework.md` に、負傷やストレスをセッションをまたいで持ち越す前提を追記
+- `01_framework_spec.md` と `04_character_framework.md` に、個人成長とギルド成長のどちらも過度に主役化せず、ゆるやかな変化として扱う方針を追記
