@@ -33,3 +33,4 @@
 - `01_framework_spec.md` と `03_request_category_tables.md` に、依頼カテゴリ8種維持、完全ランダム生成志向、日常依頼の許容、余波の案件依存、関係による案件変質強化の方針を追記
 - `08_review_notes.md` に、数字を追いすぎない軽量ギルド運営モデルの提案を追記
 - `01_framework_spec.md` と `08_review_notes.md` に、ギルド規模拡大の利点と負担を両立させ、適正規模を探る設計方針を追記
+- `01_framework_spec.md` と `08_review_notes.md` に、街や組織の成長を数値育成ではなく変化の蓄積として見せる方針を追記
