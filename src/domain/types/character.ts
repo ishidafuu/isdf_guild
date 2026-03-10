@@ -1,10 +1,10 @@
 import type { Phase } from "../enums";
 import type { WorldPackId } from "../ids";
-import type { GuildmasterNote } from "./guildmasterNote";
 import type {
   Big5Profile,
   CharacterCore,
   CharacterStatus,
+  GuildmasterNoteBase,
   PrivateDossier,
   Skill,
   Stats,
@@ -19,7 +19,7 @@ export type Character = CharacterCore & {
   traits?: TraitSet;
   skills?: Skill[];
   private_dossier?: PrivateDossier;
-  guildmaster_note_log?: GuildmasterNote[];
+  guildmaster_note_log?: GuildmasterNoteBase[];
   timeline?: TimelineEvent[];
 };
 
@@ -38,6 +38,6 @@ export type StaffCharacter = Omit<CharacterCore, "member_kind" | "role" | "sub_r
   assertiveness?: string;
   status: CharacterStatus;
   private_dossier?: PrivateDossier;
-  guildmaster_note_log?: GuildmasterNote[];
+  guildmaster_note_log?: GuildmasterNoteBase[];
   tags?: string[];
 };

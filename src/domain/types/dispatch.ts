@@ -13,9 +13,7 @@ export type Dispatch = {
   mission_id: MissionId;
   world_pack_id: WorldPackId;
   status: DispatchStatus;
-  decision?: DispatchDecision & {
-    priority: PriorityLevel;
-  };
+  decision?: DispatchDecision;
   assigned_character_ids: CharacterId[];
   party_roles?: PartyRoleAssignment[];
   risk_view?: DispatchRiskView;

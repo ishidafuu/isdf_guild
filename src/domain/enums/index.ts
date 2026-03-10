@@ -16,6 +16,9 @@ export const MISSION_CATEGORIES = [
 ] as const;
 export type MissionCategory = (typeof MISSION_CATEGORIES)[number];
 
+export const MISSION_CLIENT_TYPES = ["faction", "individual", "group"] as const;
+export type MissionClientType = (typeof MISSION_CLIENT_TYPES)[number];
+
 export const MISSION_STATUSES = ["open", "accepted", "in_progress", "closed", "withdrawn"] as const;
 export type MissionStatus = (typeof MISSION_STATUSES)[number];
 
@@ -25,12 +28,7 @@ export type DispatchStatus = (typeof DISPATCH_STATUSES)[number];
 export const REPORT_KINDS = ["mission_report", "interview_report", "rest_report"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 
-export const NOTE_SOURCE_KINDS = [
-  "mission_report",
-  "interview",
-  "rest_phase",
-  "manual",
-] as const;
+export const NOTE_SOURCE_KINDS = ["mission_report", "interview"] as const;
 export type NoteSourceKind = (typeof NOTE_SOURCE_KINDS)[number];
 
 export const PHASES = ["pre_mission", "post_mission", "post_report", "rest_phase", "session_end"] as const;
@@ -59,6 +57,12 @@ export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 
 export const CONFIDENCE_LEVELS = ["low", "uneasy", "steady", "high"] as const;
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
+
+export const RELATION_DIRECTIONS = ["up", "down", "unchanged"] as const;
+export type RelationDirection = (typeof RELATION_DIRECTIONS)[number];
+
+export const REWARD_CHANGES = ["maintained", "reduced", "lost", "bonus"] as const;
+export type RewardChange = (typeof REWARD_CHANGES)[number];
 
 export const PRESSURE_LEVELS = ["low", "medium", "high"] as const;
 export type PressureLevel = (typeof PRESSURE_LEVELS)[number];

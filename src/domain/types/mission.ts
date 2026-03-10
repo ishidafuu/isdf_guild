@@ -32,9 +32,6 @@ export type Mission = {
   twist?: MissionTwist;
   difficulty: MissionDifficulty;
   participants?: MissionParticipants;
-  state?: MissionState & {
-    status: MissionStatus;
-    result?: MissionResult | null;
-  };
+  state?: MissionState;
   tags: string[];
 };

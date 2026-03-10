@@ -2,10 +2,19 @@ import type {
   Availability,
   Atmosphere,
   BaseReadiness,
+  ConfidenceLevel,
   FactionVisibility,
+  FactionStance,
   HeatLevel,
   MemberKind,
+  MissionClientType,
+  MissionResult,
+  MissionStatus,
   Phase,
+  PressureLevel,
+  PriorityLevel,
+  RelationDirection,
+  RewardChange,
   Role,
   StaffMargin,
   StabilityLevel,
@@ -22,6 +31,7 @@ import type {
   ReportId,
   SkillId,
   TimelineEventId,
+  InterviewId,
   WorldPackId,
 } from "../ids";
 
@@ -139,7 +149,7 @@ export type FactionDescription = {
 };
 
 export type FactionGuildRelation = {
-  stance: string;
+  stance: FactionStance;
   relation_score: number;
   tags: string[];
   recent_change?: string;
@@ -171,14 +181,18 @@ export type SpeechGuide = {
 export type FactionState = {
   visibility: FactionVisibility;
   stability: StabilityLevel;
-  heat_level: number | HeatLevel;
+  heat_level: HeatLevel;
 };
 
 export type MissionClient =
   | string
   | {
-      type: "faction" | "individual" | "group";
-      faction_id?: FactionId;
+      type: "faction";
+      faction_id: FactionId;
+      name: string;
+    }
+  | {
+      type: Exclude<MissionClientType, "faction">;
       name: string;
     };
 
@@ -237,8 +251,8 @@ export type MissionDifficulty =
   | number
   | {
       target_number: number;
-      pressure?: string;
-      danger?: string;
+      pressure?: PressureLevel;
+      danger?: PressureLevel;
     };
 
 export type MissionParticipants = {
@@ -247,9 +261,9 @@ export type MissionParticipants = {
 };
 
 export type MissionState = {
-  status: string;
+  status: MissionStatus;
   accepted?: boolean;
-  result?: string | null;
+  result?: MissionResult | null;
 };
 
 export type PartyRoleAssignment = {
@@ -260,7 +274,7 @@ export type PartyRoleAssignment = {
 
 export type DispatchDecision = {
   accepted: boolean;
-  priority: string;
+  priority: PriorityLevel;
   reason_summary: string;
 };
 
@@ -278,19 +292,19 @@ export type DispatchBaseState = {
 
 export type DispatchGuildmasterView = {
   short_impression: string;
-  confidence_level: string;
+  confidence_level: ConfidenceLevel;
 };
 
 export type ReportFactLogRelationChange = {
   target_type: "character" | "faction";
   target_id: CharacterId | FactionId;
-  direction: "up" | "down" | "unchanged";
+  direction: RelationDirection;
   amount: number;
 };
 
 export type ReportFactLog = {
-  outcome?: string;
-  reward_change?: string;
+  outcome?: MissionResult;
+  reward_change?: RewardChange;
   injury_targets?: CharacterId[];
   stress_targets?: CharacterId[];
   relation_changes?: ReportFactLogRelationChange[];
@@ -309,7 +323,7 @@ export type FactionStateUpdate = {
 };
 
 export type ReportStateUpdates = {
-  mission_result: string;
+  mission_result: MissionResult;
   character_updates?: CharacterStateUpdate[];
   faction_updates?: FactionStateUpdate[];
 };
@@ -356,16 +370,17 @@ export type FacilityAvailabilityRule = {
   blocked_by_tags?: string[];
 };
 
-export type GuildmasterNoteSourceId = DispatchId | MissionId | NoteId | ReportId;
+export type GuildmasterNoteSourceId = ReportId | InterviewId;
 
 export type GuildmasterNoteBase = {
   note_id: NoteId;
   character_id: CharacterId;
   selected_text: string;
   user_note?: string;
-  source_kind: string;
+  source_kind: "mission_report" | "interview";
   source_id: GuildmasterNoteSourceId;
   created_at_phase?: Phase;
+  created_from_report_id?: ReportId;
   tags?: string[];
 };
 

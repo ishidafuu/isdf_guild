@@ -18,12 +18,8 @@ export type Report = {
   intent_tags: string[];
   reason_summary: string;
   summary_lines?: string[];
-  fact_log?: ReportFactLog & {
-    outcome?: MissionResult;
-  };
-  state_updates?: ReportStateUpdates & {
-    mission_result: MissionResult;
-  };
+  fact_log?: ReportFactLog;
+  state_updates?: ReportStateUpdates;
   follow_up?: ReportFollowUp;
   linked_notes?: LinkedNoteReference[];
 };
