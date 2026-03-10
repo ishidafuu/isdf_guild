@@ -27,6 +27,13 @@ export type NoteCandidateSet = {
   reason_summary: string;
 };
 
+export type PreMissionConversation = {
+  speaker_character_id: Character["character_id"];
+  speaker_name: string;
+  tone: "guarded" | "dry" | "direct" | "uneasy";
+  text: string;
+};
+
 export type MissionCycleState = {
   world_pack: WorldPack;
   factions: Faction[];
@@ -74,6 +81,7 @@ export type MissionCycleResult = {
   dispatch: Dispatch;
   report: Report;
   snapshot: Snapshot;
+  pre_mission_conversation: PreMissionConversation[];
   note_candidates: NoteCandidateSet[];
   selected_notes: GuildmasterNote[];
   next_state: MissionCycleState;

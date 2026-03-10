@@ -32,6 +32,16 @@ function printCycle(label: string, result: ReturnType<typeof runMinimalMissionCy
   console.log(`\n[${label}]`);
   console.log(`mission: ${result.selected_mission.display_name}`);
   console.log(`dispatch: ${result.dispatch.dispatch_id} -> ${result.dispatch.assigned_character_ids.join(", ")}`);
+  if (result.dispatch.risk_view?.staff_lines?.length) {
+    console.log(`staff: ${result.dispatch.risk_view.staff_lines.join(" / ")}`);
+  }
+  if (result.pre_mission_conversation.length > 0) {
+    console.log(
+      `party: ${result.pre_mission_conversation
+        .map((line) => `${line.speaker_name}「${line.text}」`)
+        .join(" / ")}`
+    );
+  }
   console.log(`report: ${result.report.text}`);
   console.log(`snapshot: ${result.snapshot.summary}`);
   console.log(

@@ -48,3 +48,20 @@ export function applyCharacterUpdates(input: {
     return nextCharacter;
   });
 }
+
+export function appendGuildmasterNotes(characters: Character[], selectedNotes: GuildmasterNote[]): Character[] {
+  const notesByCharacterId = new Map<string, GuildmasterNote[]>();
+  for (const note of selectedNotes) {
+    const existing = notesByCharacterId.get(note.character_id) ?? [];
+    existing.push(note);
+    notesByCharacterId.set(note.character_id, existing);
+  }
+
+  return characters.map((character) => ({
+    ...character,
+    guildmaster_note_log: [
+      ...(character.guildmaster_note_log ?? []),
+      ...(notesByCharacterId.get(character.character_id) ?? []),
+    ],
+  }));
+}

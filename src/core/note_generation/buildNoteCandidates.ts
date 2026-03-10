@@ -5,6 +5,8 @@ import { formatSequenceId } from "../mission_flow/idFactory";
 function buildCandidateTexts(character: Character, report: Report): string[] {
   const injuryTriggered = report.fact_log?.injury_targets?.includes(character.character_id) ?? false;
   const stressTriggered = report.fact_log?.stress_targets?.includes(character.character_id) ?? false;
+  const personalFlags = character.linger_state?.personal_flags ?? [];
+  const relationshipFlags = character.linger_state?.relationship_flags?.flatMap((entry) => entry.flags) ?? [];
 
   if (injuryTriggered) {
     return [
@@ -22,10 +24,42 @@ function buildCandidateTexts(character: Character, report: Report): string[] {
     ];
   }
 
+  if (personalFlags.some((flag) => flag.flag === "overwork_risk")) {
+    return [
+      `${character.name}は今回も仕事を通したが、危ない役を引き受けるのが自然になりすぎている。`,
+      `${character.name}は止まるより前に出る方を選びやすい。次は周りで止めたい。`,
+      `${character.name}には信頼できるが、任せきりにはしたくない。`,
+    ];
+  }
+
+  if (personalFlags.some((flag) => flag.flag === "shaken_confidence")) {
+    return [
+      `${character.name}は任務をまとめたが、今日は普段より慎重だった。`,
+      `${character.name}は表向き平静でも、どこか踏み込みを抑えていた。`,
+      `${character.name}は今回の成功をそのまま自信には変えられていない。`,
+    ];
+  }
+
+  if (relationshipFlags.some((flag) => flag.flag === "unexpected_fit")) {
+    return [
+      `${character.name}は意外な相手と歩幅を合わせていた。`,
+      `${character.name}は自分のやり方を崩してでも、現場を回す方を選んでいた。`,
+      `${character.name}は今回の組み合わせで見え方が少し変わった。`,
+    ];
+  }
+
+  if (relationshipFlags.some((flag) => flag.flag === "client_distrust" || flag.flag === "personal_anger")) {
+    return [
+      `${character.name}は仕事は通したが、依頼人への棘は最後まで消えなかった。`,
+      `${character.name}は表に出さないつもりでも、相手への不信が滲んでいた。`,
+      `${character.name}は次も同じ相手なら、少し扱いを考えたい。`,
+    ];
+  }
+
   return [
     `${character.name}は今回も役割を外さなかった。`,
     `${character.name}は目立たなくても任務の流れを整えていた。`,
-    `${character.name}は次も同じ働きを期待できるが、甘えすぎない方がいい。`,
+    `${character.name}は思ったより周囲の歩調を見て動いていた。`,
   ];
 }
 

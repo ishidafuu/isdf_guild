@@ -8,9 +8,11 @@ import { selectMission } from "./selectMission";
 import { buildNoteCandidates } from "../note_generation/buildNoteCandidates";
 import { selectGuildmasterNotes } from "../note_generation/selectGuildmasterNotes";
 import { applyBaseUpdates } from "../state_update/applyBaseUpdates";
-import { applyCharacterUpdates } from "../state_update/applyCharacterUpdates";
+import { appendGuildmasterNotes, applyCharacterUpdates } from "../state_update/applyCharacterUpdates";
+import { decayLingerFlags } from "../state_update/decayLingerFlags";
 import { applyFactionUpdates } from "../state_update/applyFactionUpdates";
 import { applyRelationshipUpdates } from "../state_update/applyRelationshipUpdates";
+import { buildPreMissionConversation } from "./buildPreMissionConversation";
 
 export function runMinimalMissionCycle(input: {
   state: MissionCycleState;
@@ -18,19 +20,30 @@ export function runMinimalMissionCycle(input: {
   random?: () => number;
 }): MissionCycleResult {
   const sequenceBase = input.state.dispatches.length + 1;
+  const decayedCharacters = decayLingerFlags(input.state.characters);
   const selectedMission = selectMission(input.state.missions, input.mission_id);
   const dispatch = buildDispatch({
     mission: selectedMission,
-    characters: input.state.characters,
+    characters: decayedCharacters,
     staff: input.state.staff,
     base: input.state.base,
     facilities: input.state.facilities,
     sequence: sequenceBase,
   });
+  const assignedCharacters = decayedCharacters.filter((character) =>
+    dispatch.assigned_character_ids.includes(character.character_id)
+  );
+  const preMissionConversation =
+    input.state.staff.length === 0
+      ? buildPreMissionConversation({
+          mission: selectedMission,
+          characters: assignedCharacters,
+        })
+      : [];
   const resolution = resolveMission({
     mission: selectedMission,
     dispatch,
-    characters: input.state.characters,
+    characters: decayedCharacters,
     factions: input.state.factions,
     random: input.random,
     staff_comment: dispatch.guildmaster_view?.short_impression,
@@ -41,23 +54,23 @@ export function runMinimalMissionCycle(input: {
     resolution,
     sequence: sequenceBase,
   });
+  const charactersWithState = applyCharacterUpdates({
+    characters: decayedCharacters,
+    report,
+  });
+  const charactersWithRelationships = applyRelationshipUpdates({
+    characters: charactersWithState,
+    report,
+  });
   const noteCandidates = buildNoteCandidates({
-    characters: input.state.characters,
+    characters: charactersWithRelationships,
     report,
   });
   const selectedNotes = selectGuildmasterNotes({
     note_candidate_sets: noteCandidates,
     sequence: sequenceBase,
   });
-  const charactersWithState = applyCharacterUpdates({
-    characters: input.state.characters,
-    report,
-    selected_notes: selectedNotes,
-  });
-  const charactersWithRelationships = applyRelationshipUpdates({
-    characters: charactersWithState,
-    report,
-  });
+  const charactersFinal = appendGuildmasterNotes(charactersWithRelationships, selectedNotes);
   const factions = applyFactionUpdates({
     factions: input.state.factions,
     report,
@@ -68,7 +81,7 @@ export function runMinimalMissionCycle(input: {
   });
   const snapshot = buildSnapshot({
     base,
-    characters: charactersWithRelationships,
+    characters: charactersFinal,
     factions,
     dispatch,
     report,
@@ -93,11 +106,12 @@ export function runMinimalMissionCycle(input: {
     dispatch,
     report,
     snapshot,
+    pre_mission_conversation: preMissionConversation,
     note_candidates: noteCandidates,
     selected_notes: selectedNotes,
     next_state: {
       ...input.state,
-      characters: charactersWithRelationships,
+      characters: charactersFinal,
       factions,
       base,
       missions,

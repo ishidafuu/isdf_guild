@@ -58,6 +58,16 @@ for (const scenario of scenarios) {
 
   console.log(`\n[${scenario.label}]`);
   console.log(`result=${cycle.report.state_updates?.mission_result}`);
+  if (cycle.dispatch.risk_view?.staff_lines?.length) {
+    console.log(`staff=${cycle.dispatch.risk_view.staff_lines.join(" / ")}`);
+  }
+  if (cycle.pre_mission_conversation.length > 0) {
+    console.log(
+      `party=${cycle.pre_mission_conversation
+        .map((line) => `${line.speaker_name}:${line.text}`)
+        .join(" / ")}`
+    );
+  }
   console.log(`report=${cycle.report.text}`);
   console.log(
     `carry_over=${cycle.snapshot.character_states

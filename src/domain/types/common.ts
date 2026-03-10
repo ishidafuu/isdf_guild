@@ -71,6 +71,40 @@ export type CharacterStatus = {
   recovery_note?: string;
 };
 
+export type CharacterLingerFlagKind =
+  | "friction"
+  | "unexpected_fit"
+  | "protective_instinct"
+  | "judgment_distrust"
+  | "uneasy_debt"
+  | "client_distrust"
+  | "owed_favor"
+  | "professional_respect"
+  | "personal_anger"
+  | "overwork_risk"
+  | "mission_high"
+  | "shaken_confidence";
+
+export type LingerVisibilityHint = "hidden" | "dialogue" | "memo";
+
+export type LingerFlag = {
+  flag: CharacterLingerFlagKind;
+  source_mission_id?: MissionId;
+  source_report_id?: ReportId;
+  target_id?: CharacterId | FactionId;
+  intensity: 1 | 2 | 3;
+  remaining_cycles: number;
+  visibility_hint: LingerVisibilityHint;
+};
+
+export type CharacterLingerState = {
+  personal_flags?: LingerFlag[];
+  relationship_flags?: Array<{
+    target_id: CharacterId | FactionId;
+    flags: LingerFlag[];
+  }>;
+};
+
 export type RelationshipTargetType = "character" | "faction";
 
 export type Relationship = {
@@ -78,6 +112,7 @@ export type Relationship = {
   target_id: CharacterId | FactionId;
   score: number;
   tags: string[];
+  linger_flags?: LingerFlag[];
 };
 
 export type TimelineEventKind = "backstory" | "mission_aftermath" | "relationship_shift" | "rest_event";
@@ -282,6 +317,7 @@ export type DispatchRiskView = {
   expected_dangers?: string[];
   concerns?: string[];
   fallback_plan?: string;
+  staff_lines?: string[];
 };
 
 export type DispatchBaseState = {
@@ -396,5 +432,6 @@ export type CharacterCore = {
   private_dossier?: PrivateDossier;
   guildmaster_note_log?: GuildmasterNoteBase[];
   relationships?: Relationship[];
+  linger_state?: CharacterLingerState;
   status: CharacterStatus;
 };

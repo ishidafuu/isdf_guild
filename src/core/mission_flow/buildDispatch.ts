@@ -47,25 +47,80 @@ function chooseFacilities(facilities: Facility[], mission: Mission): Facility[] 
   );
 }
 
-function buildStaffComment(staff: StaffCharacter[], mission: Mission, assignedCharacters: Character[]): string | undefined {
-  const advisor = staff[0];
-  if (!advisor) {
-    return undefined;
+function collectConcerns(mission: Mission, assignedCharacters: Character[]): string[] {
+  const concerns: string[] = [];
+  const clientFactionId =
+    typeof mission.client === "string" || mission.client.type !== "faction"
+      ? undefined
+      : mission.client.faction_id;
+
+  for (const character of assignedCharacters) {
+    if (character.status.stress >= 2 || character.status.injury >= 1) {
+      concerns.push(`${character.name}の消耗が抜けきっていない`);
+    }
+
+    const personalFlags = character.linger_state?.personal_flags ?? [];
+    if (personalFlags.some((flag) => flag.flag === "overwork_risk")) {
+      concerns.push(`${character.name}は押し切る形になると止まりにくい`);
+    }
+    if (personalFlags.some((flag) => flag.flag === "shaken_confidence")) {
+      concerns.push(`${character.name}は慎重に寄りすぎるかもしれない`);
+    }
+
+    if (
+      clientFactionId &&
+      character.linger_state?.relationship_flags?.some(
+        (entry) =>
+          entry.target_id === clientFactionId &&
+          entry.flags.some((flag) => flag.flag === "client_distrust" || flag.flag === "personal_anger")
+      )
+    ) {
+      concerns.push(`${character.name}は依頼人側への感情を残している`);
+    }
   }
 
-  const highestStress = [...assignedCharacters].sort(
-    (left, right) => right.status.stress - left.status.stress
-  )[0];
+  for (let index = 0; index < assignedCharacters.length - 1; index += 1) {
+    const left = assignedCharacters[index];
+    const right = assignedCharacters[index + 1];
+    const pairFlags =
+      left.linger_state?.relationship_flags?.find((entry) => entry.target_id === right.character_id)?.flags ?? [];
+    if (pairFlags.some((flag) => flag.flag === "friction" || flag.flag === "judgment_distrust")) {
+      concerns.push(`${left.name}と${right.name}は判断の噛み合わせに不安がある`);
+    }
+    if (pairFlags.some((flag) => flag.flag === "unexpected_fit")) {
+      concerns.push(`${left.name}と${right.name}は噛み合うが、片方に負荷が寄りやすい`);
+    }
+  }
 
-  if (highestStress && highestStress.status.stress >= 2) {
-    return `${advisor.name}は「${highestStress.name}を酷使しすぎるな」と釘を刺した。`;
+  return Array.from(new Set(concerns));
+}
+
+function buildStaffLines(staff: StaffCharacter[], concerns: string[]): string[] {
+  const advisor = staff[0];
+  if (!advisor || concerns.length === 0) {
+    return [];
+  }
+
+  return concerns.slice(0, 4).map((concern, index) => {
+    if (advisor.conversation_stance === "dry_but_caring") {
+      return index === 0
+        ? `${advisor.name}は「悪くない面子だが、${concern}」と冷たく言った。`
+        : `${advisor.name}は「それと、${concern}」と手短に付け加えた。`;
+    }
+    return `${advisor.name}は「${concern}」とだけ告げた。`;
+  });
+}
+
+function buildStaffComment(staffLines: string[], mission: Mission): string | undefined {
+  if (staffLines.length > 0) {
+    return staffLines[0];
   }
 
   if (mission.category === "negotiation") {
-    return `${advisor.name}は「結果だけでなく、誰の顔を潰すかも見ておけ」と短く言った。`;
+    return "顔を潰す相手を間違えたくない。";
   }
 
-  return `${advisor.name}は「今回も帰って来られる編成にしておけ」と確認した。`;
+  return undefined;
 }
 
 export function buildDispatch(input: {
@@ -79,7 +134,9 @@ export function buildDispatch(input: {
   const assignedCharacters = chooseAssignedCharacters(input.characters, input.mission);
   const selectedFacilities = chooseFacilities(input.facilities, input.mission);
   const targetNumber = getDifficultyTargetNumber(input.mission);
-  const staffComment = buildStaffComment(input.staff, input.mission, assignedCharacters);
+  const concerns = collectConcerns(input.mission, assignedCharacters);
+  const staffLines = buildStaffLines(input.staff, concerns);
+  const staffComment = buildStaffComment(staffLines, input.mission);
 
   return {
     dispatch_id: formatSequenceId("dispatch", input.sequence) as Dispatch["dispatch_id"],
@@ -107,15 +164,14 @@ export function buildDispatch(input: {
     })),
     risk_view: {
       expected_dangers: input.mission.obstacles.map((obstacle) => obstacle.summary),
-      concerns: assignedCharacters
-        .filter((character) => character.status.stress >= 2 || character.status.injury >= 1)
-        .map((character) => `${character.name}の消耗が気になる`),
+      concerns,
       fallback_plan:
         input.mission.category === "delivery"
           ? "正規経路が潰れていたら裏ルートへ切り替える。"
           : input.mission.category === "negotiation"
             ? "交渉が割れたら撤収し、裏市場に追加仲裁を頼む。"
             : "必要ログだけ確保して早めに離脱する。",
+      staff_lines: staffLines,
     },
     base_state: {
       base_id: input.base.base_id,
@@ -123,10 +179,8 @@ export function buildDispatch(input: {
       preparation_tags: selectedFacilities.flatMap((facility) => facility.effect_tags),
     },
     guildmaster_view: {
-      short_impression: staffComment ?? "今回は無理の少ない面子で固めた。",
-      confidence_level: assignedCharacters.some((character) => character.status.stress >= 2)
-        ? "uneasy"
-        : "steady",
+      short_impression: staffComment ?? "今回は見えている範囲では収まりがよさそうだ。",
+      confidence_level: concerns.length > 1 ? "uneasy" : "steady",
     },
     dispatch_note: assignedCharacters.map((character) => character.name).join(" / "),
     created_phase: "pre_mission",
