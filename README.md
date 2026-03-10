@@ -14,10 +14,21 @@
 - 3日分サンプル実行:
 - `src/sim/characterProgression.example.ts`
 
+## Web UI
+
+最小UIをローカルで起動するには次を実行します。
+
+```bash
+npm install
+npm run dev
+```
+
+起動後、表示されるローカルURLをブラウザで開いてください。
+
 ## 型チェック
 
 ```bash
-npx --yes -p typescript tsc -p tsconfig.json
+npm run typecheck
 ```
 
 ## サンプル実行

@@ -34,6 +34,14 @@ function chooseAssignedCharacters(characters: Character[], mission: Mission): Ch
     .slice(0, maxPartySize);
 }
 
+function chooseAssignedCharactersById(
+  characters: Character[],
+  selectedCharacterIds: Character["character_id"][]
+): Character[] {
+  const idSet = new Set(selectedCharacterIds);
+  return characters.filter((character) => idSet.has(character.character_id));
+}
+
 function chooseFacilities(facilities: Facility[], mission: Mission): Facility[] {
   const recommendedTags =
     mission.category === "delivery"
@@ -45,6 +53,14 @@ function chooseFacilities(facilities: Facility[], mission: Mission): Facility[] 
   return facilities.filter((facility) =>
     facility.effect_tags.some((tag) => recommendedTags.includes(tag))
   );
+}
+
+function chooseFacilitiesById(
+  facilities: Facility[],
+  selectedFacilityIds: Facility["facility_id"][]
+): Facility[] {
+  const idSet = new Set(selectedFacilityIds);
+  return facilities.filter((facility) => idSet.has(facility.facility_id));
 }
 
 function collectConcerns(mission: Mission, assignedCharacters: Character[]): string[] {
@@ -133,8 +149,23 @@ export function buildDispatch(input: {
 }): Dispatch {
   const assignedCharacters = chooseAssignedCharacters(input.characters, input.mission);
   const selectedFacilities = chooseFacilities(input.facilities, input.mission);
+  return buildDispatchFromSelection({
+    ...input,
+    assigned_characters: assignedCharacters,
+    selected_facilities: selectedFacilities,
+  });
+}
+
+export function buildDispatchFromSelection(input: {
+  mission: Mission;
+  staff: StaffCharacter[];
+  base: Base;
+  sequence: number;
+  assigned_characters: Character[];
+  selected_facilities: Facility[];
+}): Dispatch {
   const targetNumber = getDifficultyTargetNumber(input.mission);
-  const concerns = collectConcerns(input.mission, assignedCharacters);
+  const concerns = collectConcerns(input.mission, input.assigned_characters);
   const staffLines = buildStaffLines(input.staff, concerns);
   const staffComment = buildStaffComment(staffLines, input.mission);
 
@@ -153,8 +184,8 @@ export function buildDispatch(input: {
             ? "対立の火種を放置すると裏市場への影響が大きい。"
             : "危険は高いが、放置したときの圧力が重い。",
     },
-    assigned_character_ids: assignedCharacters.map((character) => character.character_id),
-    party_roles: assignedCharacters.map((character) => ({
+    assigned_character_ids: input.assigned_characters.map((character) => character.character_id),
+    party_roles: input.assigned_characters.map((character) => ({
       character_id: character.character_id,
       role: character.role,
       assignment_reason:
@@ -175,15 +206,42 @@ export function buildDispatch(input: {
     },
     base_state: {
       base_id: input.base.base_id,
-      selected_facility_ids: selectedFacilities.map((facility) => facility.facility_id),
-      preparation_tags: selectedFacilities.flatMap((facility) => facility.effect_tags),
+      selected_facility_ids: input.selected_facilities.map((facility) => facility.facility_id),
+      preparation_tags: input.selected_facilities.flatMap((facility) => facility.effect_tags),
     },
     guildmaster_view: {
       short_impression: staffComment ?? "今回は見えている範囲では収まりがよさそうだ。",
       confidence_level: concerns.length > 1 ? "uneasy" : "steady",
     },
-    dispatch_note: assignedCharacters.map((character) => character.name).join(" / "),
+    dispatch_note: input.assigned_characters.map((character) => character.name).join(" / "),
     created_phase: "pre_mission",
     tags: ["dispatch", input.mission.category],
   };
+}
+
+export function buildManualDispatch(input: {
+  mission: Mission;
+  characters: Character[];
+  staff: StaffCharacter[];
+  base: Base;
+  facilities: Facility[];
+  sequence: number;
+  selected_character_ids: Character["character_id"][];
+  selected_facility_ids: Facility["facility_id"][];
+}): Dispatch {
+  const assignedCharacters = chooseAssignedCharactersById(input.characters, input.selected_character_ids);
+  const selectedFacilities = chooseFacilitiesById(input.facilities, input.selected_facility_ids);
+
+  if (assignedCharacters.length === 0) {
+    throw new Error("少なくとも1人は選択してください");
+  }
+
+  return buildDispatchFromSelection({
+    mission: input.mission,
+    staff: input.staff,
+    base: input.base,
+    sequence: input.sequence,
+    assigned_characters: assignedCharacters,
+    selected_facilities: selectedFacilities,
+  });
 }
