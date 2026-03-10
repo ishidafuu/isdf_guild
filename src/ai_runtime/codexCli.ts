@@ -48,6 +48,8 @@ async function spawnCodex(input: {
         "--ephemeral",
         "--sandbox",
         "read-only",
+        "-c",
+        'model_reasoning_effort="low"',
         "--color",
         "never",
         "--output-schema",
