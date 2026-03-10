@@ -19,6 +19,7 @@ import { buildSnapshot } from "../core/mission_flow/buildSnapshot";
 import { createStorageV2Data } from "../storage_v2/schema";
 import { stateToStorageData, storageDataToState } from "../storage_v2/transaction";
 import type { MissionCycleState, NoteCandidateSet, PreMissionConversation } from "../core/mission_flow/types";
+import { requestAiGuildmasterNotes, requestAiReport } from "../ai_runtime/browserClient";
 
 const STORAGE_KEY = "isdf_guild_web_state_v1";
 
@@ -41,6 +42,12 @@ type UiState = {
   preparedCycle: PreparedCycle | null;
   selectedNotes: Record<string, string>;
   userNotes: Record<string, string>;
+  aiStatus?: {
+    loading: boolean;
+    phase?: "report" | "guildmaster_note";
+    provider?: "codex_cli" | "fallback";
+    warning?: string;
+  };
 };
 
 function initializeState(): MissionCycleState {
@@ -86,6 +93,7 @@ function createDefaultUiState(): UiState {
     preparedCycle: null,
     selectedNotes: {},
     userNotes: {},
+    aiStatus: undefined,
   };
 }
 
@@ -241,10 +249,11 @@ function resetGame(): void {
   uiState.preparedCycle = reset.preparedCycle;
   uiState.selectedNotes = reset.selectedNotes;
   uiState.userNotes = reset.userNotes;
+  uiState.aiStatus = undefined;
   render();
 }
 
-function prepareCycle(): void {
+async function prepareCycle(): Promise<void> {
   const mission = getSelectedMission();
   if (!mission) return;
   if (uiState.selectedCharacterIds.length === 0) {
@@ -280,12 +289,52 @@ function prepareCycle(): void {
     characters: decayedCharacters,
     factions: uiState.state.factions,
   });
-  const report = buildReport({
+  const fallbackReport = buildReport({
     mission,
     dispatch,
     resolution,
     sequence,
   });
+  uiState.aiStatus = {
+    loading: true,
+    phase: "report",
+  };
+  render();
+
+  let report = fallbackReport;
+  const warnings: string[] = [];
+
+  try {
+    const aiReport = await requestAiReport({
+      mission,
+      dispatch,
+      resolution,
+    });
+    report = {
+      ...fallbackReport,
+      ...aiReport.output,
+    };
+    if (aiReport.meta.warning) {
+      warnings.push(aiReport.meta.warning);
+    }
+    uiState.aiStatus = {
+      loading: true,
+      phase: "guildmaster_note",
+      provider: aiReport.meta.provider,
+      warning: aiReport.meta.warning,
+    };
+    render();
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : "report AI 接続に失敗しました。");
+    uiState.aiStatus = {
+      loading: true,
+      phase: "guildmaster_note",
+      provider: "fallback",
+      warning: warnings[warnings.length - 1],
+    };
+    render();
+  }
+
   const charactersAfterReport = applyRelationshipUpdates({
     characters: applyCharacterUpdates({
       characters: decayedCharacters,
@@ -293,10 +342,37 @@ function prepareCycle(): void {
     }),
     report,
   });
-  const noteCandidates = buildNoteCandidates({
+  const fallbackNoteCandidates = buildNoteCandidates({
     characters: charactersAfterReport,
     report,
   });
+  let noteCandidates = fallbackNoteCandidates;
+
+  try {
+    const aiNotes = await requestAiGuildmasterNotes({
+      report,
+      characters: charactersAfterReport,
+      fallback_candidate_sets: fallbackNoteCandidates,
+    });
+    noteCandidates = aiNotes.candidate_sets;
+    if (aiNotes.meta.warning) {
+      warnings.push(aiNotes.meta.warning);
+    }
+    uiState.aiStatus = {
+      loading: false,
+      phase: "guildmaster_note",
+      provider: aiNotes.meta.provider,
+      warning: warnings[0],
+    };
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : "guildmaster_note AI 接続に失敗しました。");
+    uiState.aiStatus = {
+      loading: false,
+      phase: "guildmaster_note",
+      provider: "fallback",
+      warning: warnings[0],
+    };
+  }
 
   uiState.preparedCycle = {
     mission,
@@ -379,6 +455,7 @@ function confirmCycle(): void {
   uiState.selectedCharacterIds = [];
   uiState.selectedMissionId = getOpenMissions()[0]?.mission_id ?? null;
   uiState.scene = "briefing";
+  uiState.aiStatus = undefined;
   render();
 }
 
@@ -577,11 +654,12 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
 
 function renderRoster(mission: Mission): string {
   const maxPartySize = mission.participants?.max_party_size ?? 3;
+  const disabled = uiState.aiStatus?.loading ? "disabled" : "";
   return getAvailableCharacters()
     .map((character) => {
       const selected = uiState.selectedCharacterIds.includes(character.character_id);
       return `
-        <button class="choice-card ${selected ? "selected" : ""}" data-action="toggle-character" data-character-id="${character.character_id}">
+        <button class="choice-card ${selected ? "selected" : ""}" data-action="toggle-character" data-character-id="${character.character_id}" ${disabled}>
           <div class="choice-head">
             <strong>${character.name}</strong>
             <span class="tag">${character.role}</span>
@@ -673,10 +751,12 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
 }
 
 function renderActions(mission: Mission | null): string {
+  const disabled = uiState.aiStatus?.loading ? "disabled" : "";
+
   if (!mission) {
     return `
       <div class="action-row">
-        <button class="secondary" data-action="reset-game">リセット</button>
+        <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
       </div>
     `;
   }
@@ -684,9 +764,9 @@ function renderActions(mission: Mission | null): string {
   if (uiState.scene === "briefing") {
     return `
       <div class="action-row">
-        <button data-action="enter-casting">この件の段取りを詰める</button>
-        <button class="secondary" data-action="next-mission">別の案件を聞く</button>
-        <button class="secondary" data-action="reset-game">リセット</button>
+        <button data-action="enter-casting" ${disabled}>この件の段取りを詰める</button>
+        <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
+        <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
       </div>
     `;
   }
@@ -694,17 +774,17 @@ function renderActions(mission: Mission | null): string {
   if (uiState.scene === "casting") {
     return `
       <div class="action-row">
-        <button data-action="prepare-cycle">この顔ぶれで送り出す</button>
-        <button class="secondary" data-action="back-to-briefing">机に戻る</button>
-        <button class="secondary" data-action="next-mission">別の案件を聞く</button>
+        <button data-action="prepare-cycle" ${disabled}>この顔ぶれで送り出す</button>
+        <button class="secondary" data-action="back-to-briefing" ${disabled}>机に戻る</button>
+        <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
       </div>
     `;
   }
 
   return `
     <div class="action-row">
-      <button data-action="confirm-cycle">記録して次の朝へ進む</button>
-      <button class="secondary" data-action="back-to-casting">メモを見直す</button>
+      <button data-action="confirm-cycle" ${disabled}>記録して次の朝へ進む</button>
+      <button class="secondary" data-action="back-to-casting" ${disabled}>メモを見直す</button>
     </div>
   `;
 }
@@ -771,6 +851,18 @@ function render(): void {
 
       <main class="stage-layout">
         <section class="main-stage">
+          ${
+            uiState.aiStatus
+              ? `<div class="scene-note">
+                  ${
+                    uiState.aiStatus.loading
+                      ? `AI文章を生成中です (${uiState.aiStatus.phase === "report" ? "日報" : "ギルド主メモ"})`
+                      : `AI生成: ${uiState.aiStatus.provider === "codex_cli" ? "codex CLI" : "テンプレート fallback"}`
+                  }
+                  ${uiState.aiStatus.warning ? `<div class="small muted">${uiState.aiStatus.warning}</div>` : ""}
+                </div>`
+              : ""
+          }
           ${renderMainStage()}
           ${renderActions(mission)}
         </section>
