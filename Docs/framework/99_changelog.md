@@ -16,3 +16,10 @@
 - `07_world_dictionary_japanese_occult.md` を追加し、和風怪異向け辞書を整理
 - `08_review_notes.md` を追加し、内部レビュアー観点の検討メモと暫定採用方針を整理
 - `09_questions_for_user.md` を追加し、次段階で仕様を詰めるための確認質問を整理
+
+## 2026-03-11
+
+- `01_framework_spec.md` に判定方式 `2D6`、4段階判定、軽量戦闘、短編依頼1本の前提を追記
+- `04_character_framework.md` に知識系を独立させない方針、ロールをゆるい得意分野ラベルとする方針を追記
+- `04_character_framework.md` に欠点を判定へ明確に効かせる方針、性格タグと欠点を生成前提とする方針を追記
+- `04_character_framework.md` に初期人材を力量混在型とする方針、および関係値を主要要素として扱う方針を追記
