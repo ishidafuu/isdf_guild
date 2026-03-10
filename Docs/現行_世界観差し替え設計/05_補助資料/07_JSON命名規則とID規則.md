@@ -19,8 +19,10 @@
 - `character_id`
 - `mission_id`
 - `report_id`
+- `dispatch_id`
 - `world_pack_id`
 - `faction_id`
+- `facility_id`
 - `note_id`
 - `source_id`
 - `target_id`
@@ -43,8 +45,12 @@ ID は原則として以下の接頭辞を使う。
   - 依頼
 - `report_0001`
   - 日報
+- `dispatch_0001`
+  - 出発前データ
 - `faction_0001`
   - 勢力
+- `facility_0001`
+  - 拠点設備
 - `note_0001`
   - 単体メモ
 - `note_candidate_set_0001`
@@ -78,7 +84,9 @@ ID は原則として以下の接頭辞を使う。
 - `character_id`
 - `mission_id`
 - `report_id`
+- `dispatch_id`
 - `faction_id`
+- `facility_id`
 - `world_pack_id`
 - `source_id`
 - `target_id`
@@ -152,11 +160,20 @@ ID は原則として以下の接頭辞を使う。
 
 - `report_id`
 - `mission_id`
+- `dispatch_id`
 - `kind`
 - `text`
 - `intent_tags`
 - `reason_summary`
 - `linked_notes`
+
+出発前データ:
+
+- `dispatch_id`
+- `mission_id`
+- `world_pack_id`
+- `assigned_character_ids`
+- `base_state.selected_facility_ids`
 
 ## 8. 現時点の推奨
 
