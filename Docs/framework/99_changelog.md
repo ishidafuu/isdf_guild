@@ -28,3 +28,4 @@
 - `01_framework_spec.md` と `04_character_framework.md` に、死亡や引退などの恒久損失をゲーム開始時の設定項目として切り替える方針を追記
 - `01_framework_spec.md` と `04_character_framework.md` に、負傷やストレスをセッションをまたいで持ち越す前提を追記
 - `01_framework_spec.md` と `04_character_framework.md` に、個人成長とギルド成長のどちらも過度に主役化せず、ゆるやかな変化として扱う方針を追記
+- `01_framework_spec.md` と `02_world_pack_template.md` に、初期ワールド本数を固定せず、代表パックで試してから段階的に追加する方針を追記
