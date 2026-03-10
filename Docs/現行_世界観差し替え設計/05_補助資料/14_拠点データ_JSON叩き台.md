@@ -24,6 +24,7 @@
   "world_pack_id": "world_pack_cyberpunk_base",
   "name": "港湾裏区画アジト",
   "status": "active",
+  "staff_character_ids": ["char_staff_0001"],
   "facility_ids": ["facility_clinic", "facility_briefing_room"],
   "summary": "港湾地区の裏路地にある、小規模だが実務的な拠点。"
 }
@@ -46,6 +47,7 @@
     "external_attention": "low",
     "atmosphere": "strained"
   },
+  "staff_character_ids": ["char_staff_0001", "char_staff_0002"],
   "facility_ids": ["facility_clinic", "facility_briefing_room"],
   "active_issue_tags": ["staff_shortage", "medical_strain"],
   "narrative_changes": [
@@ -78,6 +80,8 @@
   - 内部状態の少数ステータス
 - `facility_ids`
   - 所有設備一覧
+- `staff_character_ids`
+  - 所属スタッフ人物
 - `active_issue_tags`
   - 今抱えている問題
 - `narrative_changes`
@@ -114,6 +118,7 @@
 - どんな会話イベントが起きやすいか
 - 今のギルドが無理できるのか
 - 最近の仕事の余波がどこに出ているか
+- 誰が方針に口を出しそうか
 
 ## 8. 最小実装で持てば十分な項目
 
@@ -122,6 +127,7 @@
 - `name`
 - `status`
 - `facility_ids`
+- `staff_character_ids`
 - `summary`
 
 ## 9. 後から足してよい要素

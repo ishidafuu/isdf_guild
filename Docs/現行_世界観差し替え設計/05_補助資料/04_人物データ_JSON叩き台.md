@@ -21,6 +21,7 @@
 {
   "character_id": "char_0001",
   "name": "シオン",
+  "member_kind": "adventurer",
   "world_pack_id": "fantasy_base",
   "role": "frontliner",
   "stats": {
@@ -46,6 +47,7 @@
 {
   "character_id": "char_0001",
   "name": "シオン",
+  "member_kind": "adventurer",
   "world_pack_id": "fantasy_base",
   "role": "frontliner",
   "sub_roles": ["scout"],
@@ -139,6 +141,8 @@
 
 ## 4. キーごとの役割
 
+- `member_kind`
+  - `adventurer` か `staff` か
 - `role`
   - 主ロール。固定職ではなく得意分野ラベル
 - `sub_roles`
@@ -179,12 +183,48 @@
 - `character_notes`
   - `guildmaster_note_log`
 
+## 5.1 スタッフ人物の追加例
+
+```json
+{
+  "character_id": "char_staff_0001",
+  "name": "ミレイ",
+  "member_kind": "staff",
+  "world_pack_id": "world_pack_cyberpunk_base",
+  "role": "negotiator",
+  "staff_role": "advisor",
+  "advice_domains": ["assignment", "fatigue", "client_trust"],
+  "conversation_stance": "dry_but_caring",
+  "visibility_phase": ["pre_mission", "post_report", "rest_phase"],
+  "public_digest": "ギルド内で人選と依頼人対応に口を出してくる相談役。",
+  "volatile_hook": "最近は前衛の無理を止めきれないことを気にしている。",
+  "private_dossier": {
+    "core_identity": "元交渉屋の中年女性。表情は薄いが、観察眼は鋭い。",
+    "background": "企業下請けの調整役を長く務めていたが、切り捨てに耐えきれず現ギルドへ流れ着いた。",
+    "daily_texture": "帳面と端末を常に持ち歩く。食事より先に報告書を片付ける。",
+    "values": "無理で回す組織を嫌う。結果より『誰を削ったか』を気にする。",
+    "social": "不用意に甘やかさないが、放ってもおけない。",
+    "work_view": "派手な成功より継続可能性を重視する。",
+    "history_hook": "以前、無茶な配置を止められず一人を壊した記憶がある。",
+    "speech_rule": "短く断定する。気遣うときほど言葉は辛辣になる。",
+    "guild_view": "このギルドを大きくするより、潰れないようにしたい。"
+  },
+  "guildmaster_note_log": [],
+  "status": {
+    "injury": 0,
+    "stress": 1,
+    "availability": "active"
+  }
+}
+```
+
 ## 6. 先に固定するとよい必須キー
 
 今の段階で先に固定するとよいのは以下。
 
 - `character_id`
 - `name`
+- `member_kind`
 - `world_pack_id`
 - `role`
 - `stats`
