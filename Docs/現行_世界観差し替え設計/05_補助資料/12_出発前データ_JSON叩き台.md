@@ -68,6 +68,7 @@
     "fallback_plan": "正規経路が潰れていたら裏航路へ切り替える"
   },
   "base_state": {
+    "base_id": "base_0001",
     "selected_facility_ids": ["facility_clinic", "facility_briefing_room"],
     "preparation_tags": ["医療準備", "経路確認"]
   },
@@ -99,7 +100,7 @@
 - `risk_view`
   - 出発前に見えていた危険
 - `base_state`
-  - 拠点側でどの設備や準備を使ったか
+  - 拠点 ID と、どの設備や準備を使ったか
 - `guildmaster_view`
   - ギルド主としての短い見立て
 - `created_phase`

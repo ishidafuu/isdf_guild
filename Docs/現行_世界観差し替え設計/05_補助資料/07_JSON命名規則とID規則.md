@@ -23,6 +23,8 @@
 - `world_pack_id`
 - `faction_id`
 - `facility_id`
+- `base_id`
+- `snapshot_id`
 - `note_id`
 - `source_id`
 - `target_id`
@@ -51,6 +53,10 @@ ID は原則として以下の接頭辞を使う。
   - 勢力
 - `facility_0001`
   - 拠点設備
+- `base_0001`
+  - 拠点
+- `snapshot_0001`
+  - 状態スナップショット
 - `note_0001`
   - 単体メモ
 - `note_candidate_set_0001`
@@ -87,6 +93,8 @@ ID は原則として以下の接頭辞を使う。
 - `dispatch_id`
 - `faction_id`
 - `facility_id`
+- `base_id`
+- `snapshot_id`
 - `world_pack_id`
 - `source_id`
 - `target_id`
@@ -174,6 +182,25 @@ ID は原則として以下の接頭辞を使う。
 - `world_pack_id`
 - `assigned_character_ids`
 - `base_state.selected_facility_ids`
+
+拠点:
+
+- `base_id`
+- `world_pack_id`
+- `facility_ids`
+- `linked_faction_ids`
+
+設備:
+
+- `facility_id`
+- `world_pack_id`
+- `effect_tags`
+
+スナップショット:
+
+- `snapshot_id`
+- `source_report_id`
+- `source_dispatch_id`
 
 ## 8. 現時点の推奨
 
