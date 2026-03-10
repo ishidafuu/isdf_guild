@@ -2,14 +2,16 @@
 
 最終更新: 2026-03-10
 
-この文書は、`guildmaster_note` を作る前に AI が提示する仮メモ 3 件を
+この文書は、`guildmaster_note` を作る前に AI が提示する仮メモ群を
 `note_candidate_set` として保持するための叩き台を置く。
 
 ## 1. 方針
 
-- AI は人物ごとに仮メモ候補を 3 件出す
-- ユーザーは近いものを 1 件選び、必要なら短文補足する
-- 選ばれなかった候補も、その時点の AI の見立てとして短期間保持してよい
+- `note_candidate_set` は「確定メモ」ではなく、AI が先に出す仮メモの束である
+- AI は人物ごとに複数の仮メモ候補を出す
+- ユーザーは近いものを 1 件以上選び、必要なら短文補足する
+- 最小実装では、選ばれなかった候補は保存必須にしなくてよい
+- 必要なら、その時点の AI の見立てとして短期間保持してよい
 
 ## 2. 最小候補セット
 
@@ -62,9 +64,9 @@
     }
   ],
   "selection_state": {
-    "selected_candidate_id": "note_candidate_0003",
+    "selected_candidate_ids": ["note_candidate_0003"],
     "user_short_note": "単独で無理をさせない方がいい。",
-    "saved_note_id": "note_0012"
+    "saved_note_ids": ["note_0012"]
   },
   "tags": ["guildmaster_note", "candidate_set"]
 }
@@ -94,6 +96,8 @@
 - `note_candidate_set` は一時的な候補
 - `guildmaster_note` は人物データ側に保存される確定メモ
 - 日報は `linked_notes[].note_candidate_set_id` などで候補セットを参照してよい
+- 最小実装では、候補セット自体は選択後に破棄してもよい
+- 後から検証やログ再生をしたい場合だけ保存してもよい
 
 ## 6. 最小実装で必要な項目
 
@@ -103,6 +107,7 @@
 - `candidates`
 
 `selection_state` は最初から持ってもよいが、実装初期は保存先ノートとの接続だけでもよい。
+候補数は固定 3 件でなくてもよく、場面に応じて増減してよい。
 
 ## 7. 後から足してよい要素
 
