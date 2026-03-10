@@ -23,3 +23,4 @@
 - `04_character_framework.md` に知識系を独立させない方針、ロールをゆるい得意分野ラベルとする方針を追記
 - `04_character_framework.md` に欠点を判定へ明確に効かせる方針、性格タグと欠点を生成前提とする方針を追記
 - `04_character_framework.md` に初期人材を力量混在型とする方針、および関係値を主要要素として扱う方針を追記
+- `01_framework_spec.md` と `04_character_framework.md` に、成長の主役をキャラクター同士の物語とし、ギルド拡張を任意の成長軸とする方針を追記
