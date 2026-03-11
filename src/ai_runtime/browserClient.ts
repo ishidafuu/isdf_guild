@@ -40,3 +40,13 @@ export async function requestAiScene(
 ): Promise<SceneGenerationResponse> {
   return await postJson<SceneGenerationResponse>("/api/ai/scene", request);
 }
+
+export async function clearAiTextCache(): Promise<void> {
+  const response = await fetch("/api/ai/cache/clear", {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`/api/ai/cache/clear ${response.status}`);
+  }
+}

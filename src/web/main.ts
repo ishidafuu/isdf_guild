@@ -19,7 +19,7 @@ import { buildSnapshot } from "../core/mission_flow/buildSnapshot";
 import { createStorageV2Data } from "../storage_v2/schema";
 import { stateToStorageData, storageDataToState } from "../storage_v2/transaction";
 import type { MissionCycleState, NoteCandidateSet, PreMissionConversation } from "../core/mission_flow/types";
-import { requestAiGuildmasterNotes, requestAiReport, requestAiScene } from "../ai_runtime/browserClient";
+import { clearAiTextCache, requestAiGuildmasterNotes, requestAiReport, requestAiScene } from "../ai_runtime/browserClient";
 import type { SceneGenerationRequest, SceneTextPack } from "../ai_runtime/types";
 
 const STORAGE_KEY = "isdf_guild_web_state_v1";
@@ -260,6 +260,63 @@ function resetGame(): void {
   uiState.sceneTextCache = {};
   uiState.sceneTextWarnings = {};
   uiState.sceneTextLoadingKeys = [];
+  render();
+}
+
+async function clearAiCacheOnly(): Promise<void> {
+  if (uiState.aiStatus?.loading) {
+    return;
+  }
+
+  uiState.aiStatus = {
+    loading: true,
+    warning: "AI文面キャッシュを削除しています。",
+  };
+  render();
+
+  try {
+    await clearAiTextCache();
+    uiState.sceneTextCache = {};
+    uiState.sceneTextWarnings = {};
+    uiState.aiStatus = {
+      loading: false,
+      provider: "fallback",
+      warning: "AI文面キャッシュを削除しました。次回表示時に再生成されます。",
+    };
+  } catch (error) {
+    uiState.aiStatus = {
+      loading: false,
+      provider: "fallback",
+      warning: error instanceof Error ? error.message : "AI文面キャッシュ削除に失敗しました。",
+    };
+  }
+
+  render();
+}
+
+async function fullReset(): Promise<void> {
+  if (uiState.aiStatus?.loading) {
+    return;
+  }
+
+  uiState.aiStatus = {
+    loading: true,
+    warning: "ゲーム状態とAI文面キャッシュを完全リセットしています。",
+  };
+  render();
+
+  try {
+    await clearAiTextCache();
+  } catch {
+    // ゲーム状態は常に初期化し、キャッシュ削除失敗だけ警告で残す。
+  }
+
+  resetGame();
+  uiState.aiStatus = {
+    loading: false,
+    provider: "fallback",
+    warning: "ゲーム状態とAI文面キャッシュを初期化しました。",
+  };
   render();
 }
 
@@ -829,6 +886,10 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
             ? `<p class="muted small">${advisor.private_dossier?.speech_rule}</p>`
             : ""
         }
+        <div class="action-row">
+          <button class="secondary" data-action="clear-ai-cache" ${uiState.aiStatus?.loading ? "disabled" : ""}>AI文面キャッシュ削除</button>
+          <button class="secondary" data-action="full-reset" ${uiState.aiStatus?.loading ? "disabled" : ""}>完全リセット</button>
+        </div>
       </section>
       ${
         mission
@@ -1088,6 +1149,12 @@ function render(): void {
   appRoot.querySelector("[data-action='prepare-cycle']")?.addEventListener("click", prepareCycle);
   appRoot.querySelector("[data-action='confirm-cycle']")?.addEventListener("click", confirmCycle);
   appRoot.querySelector("[data-action='reset-game']")?.addEventListener("click", resetGame);
+  appRoot.querySelector("[data-action='clear-ai-cache']")?.addEventListener("click", () => {
+    void clearAiCacheOnly();
+  });
+  appRoot.querySelector("[data-action='full-reset']")?.addEventListener("click", () => {
+    void fullReset();
+  });
 
   appRoot.querySelectorAll<HTMLElement>("[data-action='toggle-character']").forEach((button) => {
     button.addEventListener("click", () => toggleCharacter(button.dataset.characterId as Character["character_id"]));

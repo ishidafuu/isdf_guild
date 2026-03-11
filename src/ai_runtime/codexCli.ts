@@ -68,6 +68,11 @@ function buildCachePath(input: CodexCliInvocation): string {
   return join(cacheDir, `${hash}.json`);
 }
 
+export async function clearCodexCliCache(): Promise<void> {
+  const cacheDir = join(process.cwd(), ".cache", "codex_cli");
+  await rm(cacheDir, { recursive: true, force: true });
+}
+
 async function spawnCodex(input: {
   prompt: string;
   schema_path: string;

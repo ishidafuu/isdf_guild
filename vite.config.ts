@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import { generateGuildmasterNotesViaCodexCli } from "./src/ai_contracts/guildmaster_note/generate";
 import { generateReportViaCodexCli } from "./src/ai_contracts/report/generate";
 import { generateSceneTextViaCodexCli } from "./src/ai_contracts/scene/generate";
+import { clearCodexCliCache } from "./src/ai_runtime/codexCli";
 import type {
   GuildmasterNoteGenerationRequest,
   ReportGenerationRequest,
@@ -62,6 +63,21 @@ export default defineConfig({
             sendJson(res, payload);
           } catch (error) {
             sendJson(res, { error: error instanceof Error ? error.message : "scene route failed" }, 500);
+          }
+        });
+
+        server.middlewares.use("/api/ai/cache/clear", async (req, res) => {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.end("Method Not Allowed");
+            return;
+          }
+
+          try {
+            await clearCodexCliCache();
+            sendJson(res, { ok: true });
+          } catch (error) {
+            sendJson(res, { error: error instanceof Error ? error.message : "cache clear failed" }, 500);
           }
         });
       },
