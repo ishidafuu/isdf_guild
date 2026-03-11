@@ -66,14 +66,17 @@ export async function generateReportViaCodexCli(input: ReportAiInput): Promise<R
 function buildReportPrompt(input: ReportAiInput, fallback: ReportAiOutput): string {
   return `
 あなたは世界観差し替え型ギルドゲームの文章生成担当です。
-退廃サイバーパンクの乾いた文体で、短く、事実と余波を分けて日報文を整えてください。
+ライトで読みやすい文体で、短く、事実と余波を分けて日報文を整えてください。
 
 重要:
 - JSONのみを返してください
 - report は事実ベースです
 - guildmaster_note のような主観断定は避けてください
-- 誇張しすぎず、現場の空気と余波を少しだけ残してください
+- 誇張しすぎず、まず何が起きたかを明確にしてください
+- その上で現場の空気や後味を少しだけ残してください
 - 必須項目 text / intent_tags / reason_summary は必ず埋めてください
+- 気取りすぎた表現や比喩は避けてください
+- 少し人間味があってもよいですが、冗談に寄せすぎないでください
 
 入力:
 ${JSON.stringify(input, null, 2)}
@@ -86,5 +89,6 @@ ${JSON.stringify(fallback, null, 2)}
 - summary_lines は最大3行
 - 既にある事実関係を壊さない
 - 結果段階、損耗、対外関係、次の火種がわかる範囲で反映する
+- 読んですぐ状況がつかめる文にする
 `.trim();
 }

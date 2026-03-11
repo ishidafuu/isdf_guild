@@ -526,45 +526,45 @@ function getRecentReports(limit = 3): Report[] {
 
 function getMissionLead(mission: Mission): string {
   if (mission.category === "delivery") {
-    return "夜明け前に線を抜く。静かだが、止まると面倒になる類いだ。";
+    return "夜明け前までに荷を通す仕事。派手じゃないけど、止まると一気に面倒になる。";
   }
   if (mission.category === "negotiation") {
-    return "刃物より先に感情が飛ぶ。誰を前に出すかで現場の空気が変わる。";
+    return "揉めてる連中をなだめる仕事。誰を前に出すかで、話が早く済むか長引くかが変わる。";
   }
-  return "企業区画だ。うまくやっても、何かしらは残ると思っておいた方がいい。";
+  return "企業区画でログを抜く仕事。うまくやっても、だいたい何かしら面倒は残る。";
 }
 
 function getMissionShadow(mission: Mission): string {
   if (mission.category === "delivery") {
-    return "納期は短い。遅らせるほど検問が厚くなる。";
+    return "締切が短い。もたつくほど検問が増えて笑えなくなる。";
   }
   if (mission.category === "negotiation") {
-    return "片方を立てすぎると、もう片方が後で噛む。";
+    return "片方の顔を立てすぎると、もう片方があとでへそを曲げる。";
   }
-  return "依頼人も全部は見せていない。報酬だけ見て拾う仕事じゃない。";
+  return "依頼人も全部は話していない。報酬だけ見て飛びつくと、あとで嫌な顔をすることになる。";
 }
 
 function getCharacterReaction(character: Character, mission: Mission): string {
   if (character.character_id === "char_shion") {
-    if (mission.category === "delivery") return "短くうなずく。危険な搬送でも、盾役が要るなら自分だという顔をする。";
-    if (mission.category === "recovery") return "表情は薄いが、企業区画と聞いた時だけ視線が少し硬くなる。";
-    return "言葉は少ない。だが断る時の間合いではない。";
+    if (mission.category === "delivery") return "短くうなずく。危ない運びでも、前に立つ役なら自分だと思っている顔だ。";
+    if (mission.category === "recovery") return "表情は薄いが、企業区画と聞いた時だけ少しだけ目つきが固くなる。";
+    return "相変わらず口数は少ない。ただ、断る時の空気ではない。";
   }
   if (character.character_id === "char_mina") {
-    if (mission.category === "recovery") return "端末を閉じる指先がわずかに強い。企業絡みだと、皮肉が先に立つ。";
-    if (mission.category === "delivery") return "搬送経路の雑さを先に気にする。受けるなら準備は詰めたい顔だ。";
-    return "依頼人の名前を聞いた時にだけ、視線が少し冷える。";
+    if (mission.category === "recovery") return "端末を閉じる指先が少し強い。企業絡みだと、だいたい機嫌がよくない。";
+    if (mission.category === "delivery") return "荷より先に経路の雑さを気にしている。受けるなら準備はちゃんとやりたいらしい。";
+    return "依頼人の名前を聞いた時だけ視線が冷える。わかりやすいと言えばわかりやすい。";
   }
   if (character.character_id === "char_gai") {
-    if (mission.category === "negotiation") return "口元だけで笑う。面倒な仲裁ほど、自分の出番だと知っている顔だ。";
-    return "軽口を挟む余裕を見せる。余裕があるというより、そう見せる癖だ。";
+    if (mission.category === "negotiation") return "口元だけで笑う。面倒な仲裁ほど、自分の出番だとわかっている顔だ。";
+    return "軽口を挟む。余裕があるというより、そうやって場を軽くする癖だ。";
   }
   if (character.character_id === "char_nora") {
-    if (mission.category === "recovery") return "先に退路を気にしている。現場の匂いをまだ嗅いでいないのに、もう出口を探している。";
-    return "返事は小さい。だが嫌な予感を飲み込む時ほど、かえって静かになる。";
+    if (mission.category === "recovery") return "先に退路を気にしている。まだ現場も見ていないのに、もう出口の心配をしている。";
+    return "返事は小さい。でも嫌な予感がある時ほど、逆に静かになる。";
   }
   if (character.character_id === "char_iza") {
-    return "すぐには断らない。誰かの穴を埋める形なら、なおさら引きにくい。";
+    return "すぐには断らない。誰かの穴埋めだと、なおさら引き受けがちだ。";
   }
   return character.public_digest;
 }
@@ -575,9 +575,9 @@ function buildBriefingFallbackPack(mission: Mission, advisor: StaffCharacter | n
 
   return {
     narration_lines: [
-      `${uiState.state.base.summary}。換気扇の音が低く回り、夜勤明けの湿気がまだ部屋に残っている。`,
+      `${uiState.state.base.summary}。朝一番、机の上には今日の案件が積まれている。`,
       advisor
-        ? `${advisor.name}は帳面の端を指で弾き、端末に積まれた案件のうち一件だけをこちらへ寄せた。`
+        ? `${advisor.name}が帳面をめくり、その中から一件だけこちらへ寄せてきた。`
         : "古い端末の通知だけが、今日の仕事の気配を告げている。",
       `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、報酬は ${getRewardText(mission)}。`,
       getMissionScaleText(mission),
@@ -604,8 +604,8 @@ function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | nu
 
   return {
     narration_lines: [
-      "依頼の輪郭は見えた。ここからは、誰にこの仕事を持たせるかだ。",
-      `多く連れて行けばいい仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。`,
+      "依頼の中身はだいたい見えた。次は誰に行ってもらうかを決める番だ。",
+      `人数を増やせば安心という仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。`,
     ],
     advisor_lines: advisor ? [getMissionShadow(mission)] : [],
     aside_lines: [
@@ -630,12 +630,12 @@ function buildAftermathFallbackPack(preparedCycle: PreparedCycle, advisor: Staff
   return {
     narration_lines: [
       result === "great_success"
-        ? "数時間後、扉が開く。空気は張っているが、崩れてはいない。"
+        ? "数時間後、扉が開く。全員くたびれてはいるが、空気は悪くない。"
         : result === "success"
-          ? "扉が開く。片づいた仕事の顔をしているが、軽く終わった気配ではない。"
-          : result === "partial_success"
-            ? "戻ってきた靴音に、少しだけ重さがある。片づいたものと残ったものが半端に混じっている。"
-            : "扉が開いた瞬間、先に伝わるのは結果より消耗だ。",
+          ? "扉が開く。仕事は片づいたらしいが、楽だったとは誰も言わなさそうだ。"
+        : result === "partial_success"
+            ? "戻ってきた靴音に少し重さがある。片づいたことと後味の悪さが半々で混じっている。"
+            : "扉が開いた瞬間、まず目に入るのは結果より疲れた顔だ。",
       `今夜の帳面に残る評価は「${resultLabel}」。`,
       preparedCycle.report.text,
       ...(preparedCycle.report.summary_lines ?? []),
@@ -643,8 +643,8 @@ function buildAftermathFallbackPack(preparedCycle: PreparedCycle, advisor: Staff
     advisor_lines: advisor
       ? [
           result === "failure"
-            ? "結果は結果だ。まず座らせる。話はそのあとでいい。"
-            : "数字より先に顔を見る。うまくいったなら、なおさらね。",
+            ? "反省会はあと。まず座って、水でも飲んでからにしよう。"
+            : "結果は悪くない。けど、ちゃんと帰ってきた顔を見てから安心する。",
         ]
       : [],
     aside_lines: preparedCycle.dispatch.risk_view?.staff_lines?.length
