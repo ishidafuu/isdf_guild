@@ -225,6 +225,23 @@ function cycleMission(direction: 1 | -1): void {
   render();
 }
 
+function selectMission(missionId: Mission["mission_id"]): void {
+  if (uiState.selectedMissionId === missionId) {
+    return;
+  }
+
+  uiState.selectedMissionId = missionId;
+  uiState.selectedCharacterIds = [];
+  uiState.briefingIntent = "";
+  uiState.castingIntent = "";
+  uiState.preparedCycle = null;
+  uiState.selectedNotes = {};
+  uiState.userNotes = {};
+  uiState.scene = "briefing";
+  uiState.briefingStep = "morning";
+  render();
+}
+
 function enterBriefingStep(step: BriefingStep): void {
   if (!getSelectedMission()) return;
   uiState.scene = "briefing";
@@ -718,6 +735,11 @@ function getFeaturedCharactersForMission(mission: Mission, limit = 2): Character
   return ordered.slice(0, limit);
 }
 
+function getClaimCharacterForMission(mission: Mission): Character {
+  const featured = getFeaturedCharactersForMission(mission, 1);
+  return featured[0] ?? getAvailableCharacters()[0] ?? uiState.state.characters[0];
+}
+
 function getBriefingCharacterLine(character: Character, mission: Mission): string {
   if (character.character_id === "char_gai") {
     return mission.category === "negotiation"
@@ -812,6 +834,35 @@ function getBriefingCrossTalk(mission: Mission, advisor: StaffCharacter | null):
   }
 
   return lines.slice(0, 3);
+}
+
+function getMorningClaimPitch(mission: Mission, character: Character): string {
+  if (character.character_id === "char_gai") {
+    return `「${mission.display_name}、手触りは悪くない。揉めるなら揉めるで、口を挟む余地はある」`;
+  }
+  if (character.character_id === "char_mina") {
+    return `「${mission.display_name} は気になる。雑に受けるなら反対、段取りを詰めるなら話は別」`;
+  }
+  if (character.character_id === "char_shion") {
+    return `「${mission.display_name}、受けるなら早めに決めろ。半端に引き延ばす方が危ない」`;
+  }
+  if (character.character_id === "char_nora") {
+    return `「${mission.display_name}、出口が見えるならやれる。見えないなら嫌だ」`;
+  }
+  return `「${mission.display_name} は回せる。足りない穴埋めならこちらでやる」`;
+}
+
+function getStaffClaimReply(mission: Mission, advisor: StaffCharacter | null): string {
+  if (!advisor) {
+    return "誰も止めない。だから余計に、止める理由を自分で拾う必要がある。";
+  }
+  if (mission.category === "delivery") {
+    return `${advisor.name}は帳面を閉じる。『急ぎたがる声が大きい。だからこそ、急ぐ理由は分けて考える』`;
+  }
+  if (mission.category === "negotiation") {
+    return `${advisor.name}は肩をすくめる。『口のうまい話は多い。片づける人間まで口がうまいとは限らない』`;
+  }
+  return `${advisor.name}は視線を上げない。『高い額には高い理由がある。たいがい嬉しくない方の理由だけど』`;
 }
 
 function getCastingCrossTalk(mission: Mission, selectedCharacters: Character[]): Array<{
@@ -1035,6 +1086,43 @@ function renderSceneLoadingNote(sceneKey: string): string {
   `;
 }
 
+function renderMorningClaimBoard(advisor: StaffCharacter | null): string {
+  const missions = getOpenMissions();
+  if (missions.length === 0) {
+    return "";
+  }
+
+  return `
+    <section class="claim-board">
+      <div class="scene-label">朝の案件まわり</div>
+      <div class="choice-stack">
+        ${missions
+          .map((mission) => {
+            const claimant = getClaimCharacterForMission(mission);
+            const selected = uiState.selectedMissionId === mission.mission_id;
+            return `
+              <button
+                class="choice-card claim-card ${selected ? "selected" : ""}"
+                data-action="select-mission"
+                data-mission-id="${mission.mission_id}"
+                ${uiState.aiStatus?.loading ? "disabled" : ""}
+              >
+                <div class="choice-head">
+                  <strong>${mission.display_name}</strong>
+                  <span class="tag">報酬 ${getRewardText(mission)}</span>
+                </div>
+                <p class="small muted">依頼人: ${getMissionClientName(mission)}</p>
+                <p class="claim-line"><span class="speaker ${getSpeakerClass(claimant.character_id)}">${claimant.name}</span>${getMorningClaimPitch(mission, claimant)}</p>
+                <p class="small muted">${getStaffClaimReply(mission, advisor)}</p>
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderCharacterDialogueBlock(lines: SceneTextPack["character_lines"]): string {
   if (lines.length === 0) {
     return "";
@@ -1053,13 +1141,7 @@ function renderCharacterDialogueBlock(lines: SceneTextPack["character_lines"]): 
 
 function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): string {
   const sceneKey = getBriefingSceneKey(mission);
-  const fallbackPack =
-    uiState.briefingStep === "morning"
-      ? buildMorningFallbackPack(mission, advisor)
-      : uiState.briefingStep === "entry"
-        ? buildEntryFallbackPack(mission, advisor)
-        : buildDecisionFallbackPack(mission, advisor);
-  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
+  const scenePack = getCachedScenePack(sceneKey);
   const warning = uiState.sceneTextWarnings[sceneKey];
   const heading =
     uiState.briefingStep === "morning"
@@ -1079,23 +1161,27 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
     <div class="story-card">
       <div class="scene-label">${heading}</div>
       <h2>${title}</h2>
-      ${renderSceneLines(scenePack.narration_lines)}
+      ${scenePack ? renderSceneLines(scenePack.narration_lines) : ""}
       ${
-        advisor
+        scenePack && advisor
           ? scenePack.advisor_lines
               .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
               .join("")
           : ""
       }
       ${
-        scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")
+        scenePack ? scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("") : ""
       }
-      <div class="line-stack chatter-stack">
-        ${crossTalk
-          .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
-          .join("")}
-      </div>
-      ${renderCharacterDialogueBlock(scenePack.character_lines)}
+      ${
+        uiState.briefingStep === "morning"
+          ? renderMorningClaimBoard(advisor)
+          : `<div class="line-stack chatter-stack">
+              ${crossTalk
+                .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
+                .join("")}
+            </div>`
+      }
+      ${scenePack ? renderCharacterDialogueBlock(scenePack.character_lines) : ""}
       ${
         uiState.briefingStep !== "morning"
           ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>`
@@ -1120,8 +1206,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
 
 function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): string {
   const sceneKey = getCastingSceneKey(mission);
-  const fallbackPack = buildCastingFallbackPack(mission, advisor);
-  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
+  const scenePack = getCachedScenePack(sceneKey);
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
@@ -1132,15 +1217,15 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
     <div class="story-card">
       <div class="scene-label">声をかける</div>
       <h2>${mission.display_name} の段取り</h2>
-      ${renderSceneLines(scenePack.narration_lines)}
+      ${scenePack ? renderSceneLines(scenePack.narration_lines) : ""}
       ${
-        advisor
+        scenePack && advisor
           ? scenePack.advisor_lines
               .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
               .join("")
           : ""
       }
-      ${scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")}
+      ${scenePack ? scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("") : ""}
       <section class="intent-panel">
         <div class="scene-note strong">今回の回し方</div>
         <p class="small muted">誰を消耗させたくないか、何を優先したいかだけを短く置く。</p>
@@ -1152,9 +1237,13 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
           .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
           .join("")}
       </div>
-      ${renderCharacterDialogueBlock(
-        scenePack.character_lines.filter((line) => selectedCharacters.some((character) => character.character_id === line.character_id))
-      )}
+      ${
+        scenePack
+          ? renderCharacterDialogueBlock(
+              scenePack.character_lines.filter((line) => selectedCharacters.some((character) => character.character_id === line.character_id))
+            )
+          : ""
+      }
       ${
         selectedCharacters.length > 0
           ? ""
@@ -1167,8 +1256,7 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
 
 function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharacter | null): string {
   const sceneKey = getAftermathSceneKey(preparedCycle);
-  const fallbackPack = buildAftermathFallbackPack(preparedCycle, advisor);
-  const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
+  const scenePack = getCachedScenePack(sceneKey);
   const returningCharacters = preparedCycle.characters_after_report.filter((character) =>
     preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
   );
@@ -1179,7 +1267,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
     <div class="story-card">
       <div class="scene-label">帰還後</div>
       <h2>${preparedCycle.mission.display_name}</h2>
-      ${renderSceneLines(scenePack.narration_lines)}
+      ${scenePack ? renderSceneLines(scenePack.narration_lines) : ""}
       <div class="line-stack chatter-stack">
         ${crossTalk
           .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
@@ -1194,13 +1282,17 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
         }))
       )}
       ${
-        advisor
+        scenePack && advisor
           ? scenePack.advisor_lines
               .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
               .join("")
           : ""
       }
-      ${scenePack.aside_lines.length > 0 ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>` : ""}
+      ${
+        scenePack && scenePack.aside_lines.length > 0
+          ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>`
+          : ""
+      }
       ${renderSceneLoadingNote(sceneKey)}
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
@@ -1572,6 +1664,9 @@ function render(): void {
     render();
   });
   appRoot.querySelector("[data-action='next-mission']")?.addEventListener("click", () => cycleMission(1));
+  appRoot.querySelectorAll<HTMLElement>("[data-action='select-mission']").forEach((button) => {
+    button.addEventListener("click", () => selectMission(button.dataset.missionId as Mission["mission_id"]));
+  });
   appRoot.querySelector("[data-action='prepare-cycle']")?.addEventListener("click", prepareCycle);
   appRoot.querySelector("[data-action='confirm-cycle']")?.addEventListener("click", confirmCycle);
   appRoot.querySelector("[data-action='reset-game']")?.addEventListener("click", resetGame);

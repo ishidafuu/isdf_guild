@@ -243,6 +243,20 @@ button:disabled {
   box-shadow: 0 0 0 1px rgba(223, 255, 67, 0.18) inset;
 }
 
+.claim-board {
+  display: grid;
+  gap: 12px;
+}
+
+.claim-card {
+  gap: 8px;
+}
+
+.claim-line {
+  margin-top: 6px;
+  color: rgba(237, 242, 247, 0.9);
+}
+
 .choice-head {
   display: flex;
   justify-content: space-between;
