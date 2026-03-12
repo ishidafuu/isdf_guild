@@ -1,9 +1,10 @@
 :root {
   color: #edf2f7;
   background:
-    radial-gradient(circle at top left, rgba(0, 208, 255, 0.12), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(255, 94, 58, 0.1), transparent 34%),
-    linear-gradient(180deg, #06090f 0%, #0b1119 55%, #090d14 100%);
+    radial-gradient(circle at top left, rgba(0, 208, 255, 0.1), transparent 26%),
+    radial-gradient(circle at 70% 10%, rgba(255, 214, 102, 0.08), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(255, 94, 58, 0.08), transparent 32%),
+    linear-gradient(180deg, #05080e 0%, #09101a 48%, #090d14 100%);
   font-family: "IBM Plex Sans JP", "Hiragino Sans", sans-serif;
   line-height: 1.7;
 }
@@ -59,11 +60,11 @@ button:disabled {
 .story-card,
 .roster-panel,
 .sidebar-panel {
-  background: rgba(8, 13, 22, 0.78);
-  border: 1px solid rgba(165, 197, 255, 0.12);
+  background: linear-gradient(180deg, rgba(8, 13, 22, 0.86), rgba(10, 16, 27, 0.72));
+  border: 1px solid rgba(165, 197, 255, 0.09);
   border-radius: 26px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
 }
 
 .topbar {
@@ -120,17 +121,20 @@ button:disabled {
 .story-card {
   display: grid;
   gap: 14px;
-  min-height: 420px;
+  min-height: 460px;
+  padding: 28px;
 }
 
 .story-line {
   color: rgba(237, 242, 247, 0.94);
-  font-size: 1.05rem;
+  font-size: 1.07rem;
 }
 
 .story-line.dialogue {
-  padding-left: 1rem;
+  padding: 0.55rem 0.8rem 0.55rem 1rem;
   border-left: 2px solid rgba(140, 182, 255, 0.35);
+  background: linear-gradient(90deg, rgba(140, 182, 255, 0.07), transparent 80%);
+  border-radius: 0 16px 16px 0;
 }
 
 .speaker {
@@ -186,6 +190,10 @@ button:disabled {
   gap: 12px;
 }
 
+.ledger-rail {
+  gap: 14px;
+}
+
 .choice-card,
 .note-option,
 .archive-entry,
@@ -197,10 +205,13 @@ button:disabled {
 
 .choice-card {
   width: 100%;
-  padding: 16px 18px;
+  padding: 18px 18px 18px 20px;
   color: #edf2f7;
   text-align: left;
   font-weight: 600;
+  border-radius: 20px;
+  border-left: 3px solid rgba(140, 182, 255, 0.18);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
 }
 
 .choice-card.selected {
@@ -237,6 +248,11 @@ button:disabled {
   margin-top: 4px;
 }
 
+.chatter-stack {
+  gap: 10px;
+  margin-top: 2px;
+}
+
 .note-option {
   display: flex;
   gap: 10px;
@@ -267,6 +283,10 @@ button:disabled {
   padding: 12px 14px;
 }
 
+.rail-panel {
+  background: linear-gradient(180deg, rgba(9, 14, 23, 0.88), rgba(8, 13, 22, 0.68));
+}
+
 .archive-entry p {
   margin: 0;
 }
@@ -278,7 +298,12 @@ button:disabled {
 
 @media (min-width: 980px) {
   .stage-layout {
-    grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+    grid-template-columns: minmax(0, 1.38fr) minmax(260px, 0.62fr);
+  }
+
+  .ledger-rail {
+    position: sticky;
+    top: 18px;
   }
 }
 

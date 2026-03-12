@@ -698,9 +698,86 @@ function getCharacterReaction(character: Character, mission: Mission): string {
   return character.public_digest;
 }
 
+function getCharacterName(characterId: Character["character_id"]): string {
+  return uiState.state.characters.find((character) => character.character_id === characterId)?.name ?? characterId;
+}
+
+function getFeaturedCharactersForMission(mission: Mission, limit = 2): Character[] {
+  const recommendedRoles = mission.participants?.recommended_roles ?? [];
+  const available = getAvailableCharacters();
+  const matched = available.filter((character) => recommendedRoles.includes(character.role));
+  const ordered = matched.length > 0 ? matched : available;
+  return ordered.slice(0, limit);
+}
+
+function getBriefingCharacterLine(character: Character, mission: Mission): string {
+  if (character.character_id === "char_gai") {
+    return mission.category === "negotiation"
+      ? "椅子の背に寄りかかる。『話をまとめるだけなら軽い。軽く済めば、だけど』"
+      : "肩をすくめる。『金の匂いはする。ついでに面倒の匂いもするけどな』";
+  }
+  if (character.character_id === "char_mina") {
+    return mission.category === "recovery"
+      ? "端末から目を上げる。『企業絡みなら、雑な説明を真に受けない方がいい』"
+      : "資料を見て眉をひそめる。『準備不足で押すなら、誰かが後で泣く』";
+  }
+  if (character.character_id === "char_shion") {
+    return "壁際から一度だけうなずく。『受けるなら、引き方だけ先に決めておけ』";
+  }
+  if (character.character_id === "char_nora") {
+    return "目線は低いままだ。『嫌な感じはある。たぶん、入口より出口で困る』";
+  }
+  return "短く息を吐く。仕事の匂いだけは、もう十分に伝わっている。";
+}
+
+function getSelectedCharacterBanter(character: Character, mission: Mission): string {
+  if (character.character_id === "char_shion") {
+    return mission.category === "delivery"
+      ? "腕を組んで立つ。『運ぶだけなら運ぶ。ただ、止められた時の方が面倒だ』"
+      : "視線だけで返す。『前に出る役が要るならやる。無茶はさせるな』";
+  }
+  if (character.character_id === "char_mina") {
+    return mission.category === "recovery"
+      ? "端末を叩きながら言う。『抜くなら抜くでいい。雑に入るなら私は行かない』"
+      : "肩越しに言葉を投げる。『準備に時間をくれるなら動ける。根性論なら却下』";
+  }
+  if (character.character_id === "char_gai") {
+    return "笑っているが目は仕事の方を向いている。『揉めたらしゃべる。しゃべって駄目なら、その時考える』";
+  }
+  if (character.character_id === "char_nora") {
+    return "小さく首を振る。『退路だけは先にほしい。あとで探すのは遅い』";
+  }
+  return "少し間を置いてから返す。『足りない穴埋めならやる。雑に投げるなら考える』";
+}
+
+function getAftermathCharacterBanter(character: Character, mission: Mission, result: string): string {
+  if (character.character_id === "char_gai") {
+    return result === "failure"
+      ? "乾いた笑いだけが先に出る。『笑えない方の外し方だな。次はもう少しマシにやる』"
+      : "片手を上げる。『ほらな、面倒は面倒でも片づかない面倒じゃなかった』";
+  }
+  if (character.character_id === "char_mina") {
+    return result === "failure"
+      ? "額を押さえる。『言った通り、雑に入るとこうなる』"
+      : "端末を閉じる。『終わった。気持ちよくはないけど、終わっただけ上等』";
+  }
+  if (character.character_id === "char_shion") {
+    return result === "failure"
+      ? "短く言う。『押し切れなかった。次は押し方を変える』"
+      : "壁にもたれる。『戻った。それで十分だろ』";
+  }
+  if (character.character_id === "char_nora") {
+    return result === "failure"
+      ? "声が小さい。『やっぱり出口が狭かった』"
+      : "ようやく肩を落とす。『帰れた。今日はそれでいい』";
+  }
+  return result === "failure" ? "疲れを隠しきれない。『次はもう少し、うまくやる』" : "息をつく。『片づいたなら、それでいい』";
+}
+
 function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const alternatives = getOpenMissions().filter((entry) => entry.mission_id !== mission.mission_id);
   const recentNotes = getRecentNotes(1);
+  const featuredCharacters = getFeaturedCharactersForMission(mission, 1);
 
   return {
     narration_lines: [
@@ -716,12 +793,16 @@ function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | nu
       ...(alternatives.length > 0 ? [`脇にはまだ ${alternatives.length} 件ほど話が残っている。`] : []),
       ...(recentNotes.length > 0 ? [`昨夜のメモ: ${recentNotes[0]}`] : []),
     ],
-    character_lines: [],
+    character_lines: featuredCharacters.map((character) => ({
+      character_id: character.character_id,
+      text: getBriefingCharacterLine(character, mission),
+    })),
   };
 }
 
 function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const entryMode = getMissionEntryMode(mission);
+  const featuredCharacters = getFeaturedCharactersForMission(mission, 2);
 
   if (entryMode === "staff_report") {
     return {
@@ -732,7 +813,10 @@ function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null
       ],
       advisor_lines: advisor ? [getMissionLead(mission), getMissionShadow(mission)] : [],
       aside_lines: [`ざっくりした危うさ: ${getRiskText(mission)}`],
-      character_lines: [],
+      character_lines: featuredCharacters.map((character) => ({
+        character_id: character.character_id,
+        text: getBriefingCharacterLine(character, mission),
+      })),
     };
   }
 
@@ -745,7 +829,10 @@ function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null
       ],
       advisor_lines: advisor ? ["拾える話ではある。ただ、拾った時点でこっちも泥をかぶる。"] : [],
       aside_lines: [`依頼人の名義は ${getMissionClientName(mission)}。${getRiskText(mission)}`],
-      character_lines: [],
+      character_lines: featuredCharacters.map((character) => ({
+        character_id: character.character_id,
+        text: getBriefingCharacterLine(character, mission),
+      })),
     };
   }
 
@@ -757,11 +844,15 @@ function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null
     ],
     advisor_lines: advisor ? ["話は筋が通っている。ただ、相手が全部を出している顔ではない。"] : [],
     aside_lines: [`ざっくりした危うさ: ${getRiskText(mission)}`],
-    character_lines: [],
+    character_lines: featuredCharacters.map((character) => ({
+      character_id: character.character_id,
+      text: getBriefingCharacterLine(character, mission),
+    })),
   };
 }
 
 function buildDecisionFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+  const featuredCharacters = getFeaturedCharactersForMission(mission, 1);
   return {
     narration_lines: [
       "話の輪郭は見えた。ここで頷くか、もう少しだけ相手の腹を探るかを決める番だ。",
@@ -776,7 +867,10 @@ function buildDecisionFallbackPack(mission: Mission, advisor: StaffCharacter | n
         ]
       : [],
     aside_lines: [`この場で決めること: 受けるか、保留するか、誰の意見を聞くか。`],
-    character_lines: [],
+    character_lines: featuredCharacters.map((character) => ({
+      character_id: character.character_id,
+      text: getBriefingCharacterLine(character, mission),
+    })),
   };
 }
 
@@ -798,10 +892,13 @@ function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | nu
       `いま声をかけた顔ぶれ: ${
         selectedCharacters.length > 0 ? selectedCharacters.map((character) => character.name).join(" / ") : "まだ誰も呼んでいない"
       }`,
+      selectedCharacters.length > 1 ? "空気は悪くない。あとは誰を前に立たせるかだ。" : "まだ配役は固まりきっていない。",
     ],
     character_lines: availableCharacters.map((character) => ({
       character_id: character.character_id,
-      text: getCharacterReaction(character, mission),
+      text: selectedCharacters.some((selected) => selected.character_id === character.character_id)
+        ? getSelectedCharacterBanter(character, mission)
+        : getCharacterReaction(character, mission),
     })),
   };
 }
@@ -838,7 +935,7 @@ function buildAftermathFallbackPack(preparedCycle: PreparedCycle, advisor: Staff
       : preparedCycle.pre_mission_conversation.map((line) => `${line.speaker_name}「${line.text}」`),
     character_lines: returningCharacters.map((character) => ({
       character_id: character.character_id,
-      text: `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`,
+      text: `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, result)}`,
     })),
   };
 }
@@ -864,6 +961,18 @@ function renderSceneLoadingNote(sceneKey: string): string {
     <div class="scene-note loading-note">
       <strong>AI文章を生成中です。</strong>
       <div class="small muted">いま表示している文は仮の文面です。でき次第、この場面の文章を差し替えます。</div>
+    </div>
+  `;
+}
+
+function renderCharacterDialogueBlock(lines: SceneTextPack["character_lines"]): string {
+  if (lines.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="line-stack chatter-stack">
+      ${lines.map((line) => renderDialogueLine(getCharacterName(line.character_id), line.text)).join("")}
     </div>
   `;
 }
@@ -902,6 +1011,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
       ${
         scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")
       }
+      ${renderCharacterDialogueBlock(scenePack.character_lines)}
       ${
         uiState.briefingStep !== "morning"
           ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>`
@@ -946,16 +1056,12 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
         <textarea class="textarea" data-action="casting-intent" placeholder="例: 無理を押さずに、退路を作れる顔ぶれにしたい">${uiState.castingIntent}</textarea>
       </section>
       ${renderSceneLoadingNote(sceneKey)}
+      ${renderCharacterDialogueBlock(
+        scenePack.character_lines.filter((line) => selectedCharacters.some((character) => character.character_id === line.character_id))
+      )}
       ${
         selectedCharacters.length > 0
-          ? `<div class="line-stack">${selectedCharacters
-              .map((character) =>
-                renderDialogueLine(
-                  character.name,
-                  getSceneCharacterLine(scenePack, character.character_id) ?? getCharacterReaction(character, mission)
-                )
-              )
-              .join("")}</div>`
+          ? ""
           : ""
       }
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
@@ -977,17 +1083,14 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
       <div class="scene-label">帰還後</div>
       <h2>${preparedCycle.mission.display_name}</h2>
       ${renderSceneLines(scenePack.narration_lines)}
-      <div class="line-stack">
-        ${returningCharacters
-          .map((character) =>
-            renderDialogueLine(
-              character.name,
-              getSceneCharacterLine(scenePack, character.character_id) ??
-                `${getConditionText(character)} ${getCharacterReaction(character, preparedCycle.mission)}`
-            )
-          )
-          .join("")}
-      </div>
+      ${renderCharacterDialogueBlock(
+        returningCharacters.map((character) => ({
+          character_id: character.character_id,
+          text:
+            getSceneCharacterLine(scenePack, character.character_id) ??
+            `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, preparedCycle.report.state_updates?.mission_result ?? "unknown")}`,
+        }))
+      )}
       ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
       ${scenePack.aside_lines.length > 0 ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>` : ""}
       ${renderSceneLoadingNote(sceneKey)}
@@ -1058,9 +1161,9 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
     .join("");
 
   return `
-    <aside class="sidebar">
-      <section class="sidebar-panel">
-        <div class="scene-label">案内役</div>
+    <aside class="sidebar ledger-rail">
+      <section class="sidebar-panel rail-panel">
+        <div class="scene-label">帳場</div>
         <h3>${advisor?.name ?? "記録端末"}</h3>
         <p>${advisor?.public_digest ?? "今日は人の気配が薄い。"}</p>
         ${
@@ -1075,8 +1178,8 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
       </section>
       ${
         mission
-          ? `<section class="sidebar-panel">
-              <div class="scene-label">今日の案件</div>
+          ? `<section class="sidebar-panel rail-panel">
+              <div class="scene-label">机の端メモ</div>
               <h3>${mission.display_name}</h3>
               <p>${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>
               <div class="small muted">依頼人: ${getMissionClientName(mission)}</div>
@@ -1087,14 +1190,14 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
       }
       ${
         otherMissions
-          ? `<section class="sidebar-panel">
-              <div class="scene-label">脇にある話</div>
+          ? `<section class="sidebar-panel rail-panel">
+              <div class="scene-label">脇の話</div>
               ${otherMissions}
             </section>`
           : ""
       }
-      <section class="sidebar-panel">
-        <div class="scene-label">記録</div>
+      <section class="sidebar-panel rail-panel">
+        <div class="scene-label">古い記録</div>
         ${history || `<p class="muted">まだ何も残っていない。</p>`}
       </section>
     </aside>
