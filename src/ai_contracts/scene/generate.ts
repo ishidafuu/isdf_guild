@@ -1,5 +1,6 @@
 import { runCodexCliJson } from "../../ai_runtime/codexCli";
 import type { SceneGenerationRequest, SceneGenerationResponse, SceneTextPack } from "../../ai_runtime/types";
+import { buildSharedStylePrompt } from "../shared/stylePrompt";
 
 const SCENE_OUTPUT_SCHEMA = {
   type: "object",
@@ -66,6 +67,8 @@ function buildScenePrompt(input: SceneGenerationRequest): string {
 あなたは世界観差し替え型ギルドゲームのシーン文章生成担当です。
 ライトで読みやすいサウンドノベル風の場面文を書きます。
 
+${buildSharedStylePrompt()}
+
 重要:
 - JSONのみを返してください
 - まず「何が起きているか」「誰が何をしようとしているか」を明確にしてください
@@ -74,7 +77,6 @@ function buildScenePrompt(input: SceneGenerationRequest): string {
 - その上で、人物の人間味や軽い冗談、気安さを少し入れてください
 - 地の文は短く、わかりやすくしてください
 - report 本文をそのまま書き直すのではなく、場面として見せてください
-- 大げさな演出や過剰な詩性、気取りすぎた比喩は避けてください
 - キャラごとの喋り方や観察の差は出してください
 - 重すぎず、少し笑える抜けや人間臭さがあって構いません
 - ただし世界観が軽薄になりすぎないようにしてください

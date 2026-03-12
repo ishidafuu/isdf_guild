@@ -12,6 +12,7 @@ import type {
 } from "../../ai_runtime/types";
 import type { NoteCandidateSet } from "../../core/mission_flow/types";
 import { formatSequenceId } from "../../core/mission_flow/idFactory";
+import { buildSharedStylePrompt } from "../shared/stylePrompt";
 
 const NOTE_OUTPUT_SCHEMA = {
   type: "object",
@@ -157,12 +158,13 @@ function buildGuildmasterNotePrompt(
 あなたはギルド主メモ候補の下書きを行います。
 読みやすく人間味のある筆致で、人物への観察メモ候補を2〜4件返してください。
 
+${buildSharedStylePrompt()}
+
 重要:
 - JSONのみを返してください
 - これは report ではなく guildmaster_note 候補です
 - 主観は含めてよいですが、見えていない事実は断定しないでください
 - 候補同士は少し観点を変えてください
-- 重すぎる断定や気取った言い回しは避けてください
 - 少し笑える人間臭さや、困った癖への軽い苦笑が入っても構いません
 
 入力:

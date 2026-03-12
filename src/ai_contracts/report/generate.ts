@@ -6,6 +6,7 @@ import {
 } from "./contracts";
 import type { ReportGenerationResponse } from "../../ai_runtime/types";
 import { runCodexCliJson } from "../../ai_runtime/codexCli";
+import { buildSharedStylePrompt } from "../shared/stylePrompt";
 
 const REPORT_OUTPUT_SCHEMA = {
   type: "object",
@@ -68,6 +69,8 @@ function buildReportPrompt(input: ReportAiInput, fallback: ReportAiOutput): stri
 あなたは世界観差し替え型ギルドゲームの文章生成担当です。
 ライトで読みやすい文体で、短く、事実と余波を分けて日報文を整えてください。
 
+${buildSharedStylePrompt()}
+
 重要:
 - JSONのみを返してください
 - report は事実ベースです
@@ -75,7 +78,6 @@ function buildReportPrompt(input: ReportAiInput, fallback: ReportAiOutput): stri
 - 誇張しすぎず、まず何が起きたかを明確にしてください
 - その上で現場の空気や後味を少しだけ残してください
 - 必須項目 text / intent_tags / reason_summary は必ず埋めてください
-- 気取りすぎた表現や比喩は避けてください
 - 少し人間味があってもよいですが、冗談に寄せすぎないでください
 
 入力:
