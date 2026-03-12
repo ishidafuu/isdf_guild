@@ -1362,7 +1362,6 @@ function render(): void {
       delete uiState.sceneTextCache[getBriefingSceneKey(mission)];
       delete uiState.sceneTextWarnings[getBriefingSceneKey(mission)];
     }
-    render();
   });
   appRoot.querySelector<HTMLTextAreaElement>("[data-action='casting-intent']")?.addEventListener("input", (event) => {
     const target = event.currentTarget as HTMLTextAreaElement | null;
@@ -1372,7 +1371,6 @@ function render(): void {
       delete uiState.sceneTextCache[getCastingSceneKey(mission)];
       delete uiState.sceneTextWarnings[getCastingSceneKey(mission)];
     }
-    render();
   });
 
   appRoot.querySelectorAll<HTMLElement>("[data-action='toggle-character']").forEach((button) => {
