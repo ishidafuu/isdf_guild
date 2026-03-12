@@ -702,6 +702,14 @@ function getCharacterName(characterId: Character["character_id"]): string {
   return uiState.state.characters.find((character) => character.character_id === characterId)?.name ?? characterId;
 }
 
+function getSpeakerClass(characterId?: Character["character_id"] | null): string {
+  if (!characterId) {
+    return "";
+  }
+
+  return `speaker-${characterId.split("_").join("-")}`;
+}
+
 function getFeaturedCharactersForMission(mission: Mission, limit = 2): Character[] {
   const recommendedRoles = mission.participants?.recommended_roles ?? [];
   const available = getAvailableCharacters();
@@ -772,6 +780,68 @@ function getAftermathCharacterBanter(character: Character, mission: Mission, res
       : "ようやく肩を落とす。『帰れた。今日はそれでいい』";
   }
   return result === "failure" ? "疲れを隠しきれない。『次はもう少し、うまくやる』" : "息をつく。『片づいたなら、それでいい』";
+}
+
+function getBriefingCrossTalk(mission: Mission, advisor: StaffCharacter | null): Array<{
+  character_id?: Character["character_id"];
+  speaker: string;
+  text: string;
+}> {
+  const featured = getFeaturedCharactersForMission(mission, 2);
+  const lines: Array<{ character_id?: Character["character_id"]; speaker: string; text: string }> = [];
+
+  if (advisor) {
+    lines.push({
+      character_id: advisor.character_id,
+      speaker: advisor.name,
+      text:
+        mission.category === "delivery"
+          ? "急ぎの返事を欲しがってる。急いで受けるのと、雑に受けるのは別だからね。"
+          : mission.category === "negotiation"
+            ? "話は丸い。でも持ってきた顔が丸い時ほど、後ろで角が立ってる。"
+            : "大きい額が出てる。大きい額を出す時は、向こうも急いでると思って。"
+    });
+  }
+
+  for (const character of featured) {
+    lines.push({
+      character_id: character.character_id,
+      speaker: character.name,
+      text: getBriefingCharacterLine(character, mission),
+    });
+  }
+
+  return lines.slice(0, 3);
+}
+
+function getCastingCrossTalk(mission: Mission, selectedCharacters: Character[]): Array<{
+  character_id: Character["character_id"];
+  speaker: string;
+  text: string;
+}> {
+  const lines = selectedCharacters.map((character) => ({
+    character_id: character.character_id,
+    speaker: character.name,
+    text: getSelectedCharacterBanter(character, mission),
+  }));
+
+  return lines.slice(0, 3);
+}
+
+function getAftermathCrossTalk(preparedCycle: PreparedCycle): Array<{
+  character_id: Character["character_id"];
+  speaker: string;
+  text: string;
+}> {
+  const result = preparedCycle.report.state_updates?.mission_result ?? "unknown";
+  return preparedCycle.characters_after_report
+    .filter((character) => preparedCycle.dispatch.assigned_character_ids.includes(character.character_id))
+    .slice(0, 3)
+    .map((character) => ({
+      character_id: character.character_id,
+      speaker: character.name,
+      text: `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, result)}`,
+    }));
 }
 
 function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
@@ -948,8 +1018,8 @@ function renderSceneLines(lines: string[]): string {
   return lines.map((line) => `<p class="story-line">${line}</p>`).join("");
 }
 
-function renderDialogueLine(speaker: string, text: string): string {
-  return `<p class="story-line dialogue"><span class="speaker">${speaker}</span>「${text}」</p>`;
+function renderDialogueLine(speaker: string, text: string, speakerClass = ""): string {
+  return `<p class="story-line dialogue"><span class="speaker ${speakerClass}">${speaker}</span>「${text}」</p>`;
 }
 
 function renderSceneLoadingNote(sceneKey: string): string {
@@ -972,7 +1042,11 @@ function renderCharacterDialogueBlock(lines: SceneTextPack["character_lines"]): 
 
   return `
     <div class="line-stack chatter-stack">
-      ${lines.map((line) => renderDialogueLine(getCharacterName(line.character_id), line.text)).join("")}
+      ${lines
+        .map((line) =>
+          renderDialogueLine(getCharacterName(line.character_id), line.text, getSpeakerClass(line.character_id))
+        )
+        .join("")}
     </div>
   `;
 }
@@ -999,6 +1073,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
       : uiState.briefingStep === "entry"
         ? mission.display_name
         : `${mission.display_name} をどう受けるか`;
+  const crossTalk = getBriefingCrossTalk(mission, advisor);
 
   return `
     <div class="story-card">
@@ -1006,11 +1081,20 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
       <h2>${title}</h2>
       ${renderSceneLines(scenePack.narration_lines)}
       ${
-        advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""
+        advisor
+          ? scenePack.advisor_lines
+              .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
+              .join("")
+          : ""
       }
       ${
         scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")
       }
+      <div class="line-stack chatter-stack">
+        ${crossTalk
+          .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
+          .join("")}
+      </div>
       ${renderCharacterDialogueBlock(scenePack.character_lines)}
       ${
         uiState.briefingStep !== "morning"
@@ -1042,13 +1126,20 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
     uiState.selectedCharacterIds.includes(character.character_id)
   );
   const warning = uiState.sceneTextWarnings[sceneKey];
+  const crossTalk = getCastingCrossTalk(mission, selectedCharacters);
 
   return `
     <div class="story-card">
       <div class="scene-label">声をかける</div>
       <h2>${mission.display_name} の段取り</h2>
       ${renderSceneLines(scenePack.narration_lines)}
-      ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
+      ${
+        advisor
+          ? scenePack.advisor_lines
+              .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
+              .join("")
+          : ""
+      }
       ${scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")}
       <section class="intent-panel">
         <div class="scene-note strong">今回の回し方</div>
@@ -1056,6 +1147,11 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
         <textarea class="textarea" data-action="casting-intent" placeholder="例: 無理を押さずに、退路を作れる顔ぶれにしたい">${uiState.castingIntent}</textarea>
       </section>
       ${renderSceneLoadingNote(sceneKey)}
+      <div class="line-stack chatter-stack">
+        ${crossTalk
+          .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
+          .join("")}
+      </div>
       ${renderCharacterDialogueBlock(
         scenePack.character_lines.filter((line) => selectedCharacters.some((character) => character.character_id === line.character_id))
       )}
@@ -1077,12 +1173,18 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
     preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
   );
   const warning = uiState.sceneTextWarnings[sceneKey];
+  const crossTalk = getAftermathCrossTalk(preparedCycle);
 
   return `
     <div class="story-card">
       <div class="scene-label">帰還後</div>
       <h2>${preparedCycle.mission.display_name}</h2>
       ${renderSceneLines(scenePack.narration_lines)}
+      <div class="line-stack chatter-stack">
+        ${crossTalk
+          .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
+          .join("")}
+      </div>
       ${renderCharacterDialogueBlock(
         returningCharacters.map((character) => ({
           character_id: character.character_id,
@@ -1091,7 +1193,13 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
             `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, preparedCycle.report.state_updates?.mission_result ?? "unknown")}`,
         }))
       )}
-      ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
+      ${
+        advisor
+          ? scenePack.advisor_lines
+              .map((line) => renderDialogueLine(advisor.name, line, getSpeakerClass(advisor.character_id)))
+              .join("")
+          : ""
+      }
       ${scenePack.aside_lines.length > 0 ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>` : ""}
       ${renderSceneLoadingNote(sceneKey)}
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
@@ -1109,7 +1217,7 @@ function renderRoster(mission: Mission): string {
       return `
         <button class="choice-card ${selected ? "selected" : ""}" data-action="toggle-character" data-character-id="${character.character_id}" ${disabled}>
           <div class="choice-head">
-            <strong>${character.name}</strong>
+            <strong class="speaker ${getSpeakerClass(character.character_id)}">${character.name}</strong>
             <span class="tag">${character.role}</span>
           </div>
           <p>${selected ? "すでに話を通した。" : "この件を持ちかけるなら、こんな顔をする。"} ${

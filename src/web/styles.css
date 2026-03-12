@@ -144,6 +144,30 @@ button:disabled {
   font-weight: 700;
 }
 
+.speaker-char-shion {
+  color: #8ec8ff;
+}
+
+.speaker-char-mina {
+  color: #ffd36e;
+}
+
+.speaker-char-gai {
+  color: #7ff5c9;
+}
+
+.speaker-char-nora {
+  color: #c6b7ff;
+}
+
+.speaker-char-iza {
+  color: #ff9aa2;
+}
+
+.speaker-char-staff-mirei {
+  color: #ffb86b;
+}
+
 .muted,
 .muted-line,
 .small {
