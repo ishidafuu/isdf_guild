@@ -25,6 +25,7 @@ import type { SceneGenerationRequest, SceneTextPack } from "../ai_runtime/types"
 const STORAGE_KEY = "isdf_guild_web_state_v1";
 
 type SceneMode = "briefing" | "casting" | "aftermath";
+type BriefingStep = "morning" | "entry" | "decision";
 
 type PreparedCycle = {
   mission: Mission;
@@ -38,8 +39,11 @@ type PreparedCycle = {
 type UiState = {
   state: MissionCycleState;
   scene: SceneMode;
+  briefingStep: BriefingStep;
   selectedMissionId: Mission["mission_id"] | null;
   selectedCharacterIds: Character["character_id"][];
+  briefingIntent: string;
+  castingIntent: string;
   preparedCycle: PreparedCycle | null;
   selectedNotes: Record<string, string>;
   userNotes: Record<string, string>;
@@ -92,8 +96,11 @@ function createDefaultUiState(): UiState {
   return {
     state,
     scene: "briefing",
+    briefingStep: "morning",
     selectedMissionId: firstMission?.mission_id ?? null,
     selectedCharacterIds: [],
+    briefingIntent: "",
+    castingIntent: "",
     preparedCycle: null,
     selectedNotes: {},
     userNotes: {},
@@ -208,10 +215,21 @@ function cycleMission(direction: 1 | -1): void {
   const nextIndex = (baseIndex + direction + missions.length) % missions.length;
   uiState.selectedMissionId = missions[nextIndex]?.mission_id ?? null;
   uiState.selectedCharacterIds = [];
+  uiState.briefingIntent = "";
+  uiState.castingIntent = "";
   uiState.preparedCycle = null;
   uiState.selectedNotes = {};
   uiState.userNotes = {};
   uiState.scene = "briefing";
+  uiState.briefingStep = "morning";
+  render();
+}
+
+function enterBriefingStep(step: BriefingStep): void {
+  if (!getSelectedMission()) return;
+  uiState.scene = "briefing";
+  uiState.briefingStep = step;
+  uiState.preparedCycle = null;
   render();
 }
 
@@ -224,6 +242,7 @@ function enterCasting(): void {
 
 function returnToBriefing(): void {
   uiState.scene = "briefing";
+  uiState.briefingStep = "decision";
   uiState.preparedCycle = null;
   uiState.selectedNotes = {};
   uiState.userNotes = {};
@@ -251,8 +270,11 @@ function resetGame(): void {
   const reset = createDefaultUiState();
   uiState.state = reset.state;
   uiState.scene = reset.scene;
+  uiState.briefingStep = reset.briefingStep;
   uiState.selectedMissionId = reset.selectedMissionId;
   uiState.selectedCharacterIds = reset.selectedCharacterIds;
+  uiState.briefingIntent = reset.briefingIntent;
+  uiState.castingIntent = reset.castingIntent;
   uiState.preparedCycle = reset.preparedCycle;
   uiState.selectedNotes = reset.selectedNotes;
   uiState.userNotes = reset.userNotes;
@@ -520,19 +542,22 @@ function confirmCycle(): void {
   uiState.selectedNotes = {};
   uiState.userNotes = {};
   uiState.selectedCharacterIds = [];
+  uiState.briefingIntent = "";
+  uiState.castingIntent = "";
   uiState.selectedMissionId = getOpenMissions()[0]?.mission_id ?? null;
   uiState.scene = "briefing";
+  uiState.briefingStep = "morning";
   uiState.aiStatus = undefined;
   render();
 }
 
 function getBriefingSceneKey(mission: Mission): string {
-  return `briefing:${mission.mission_id}`;
+  return `briefing:${uiState.briefingStep}:${mission.mission_id}:${uiState.briefingIntent.trim()}`;
 }
 
 function getCastingSceneKey(mission: Mission): string {
   const memberKey = [...uiState.selectedCharacterIds].sort().join(",");
-  return `casting:${mission.mission_id}:${memberKey}`;
+  return `casting:${mission.mission_id}:${memberKey}:${uiState.castingIntent.trim()}`;
 }
 
 function getAftermathSceneKey(preparedCycle: PreparedCycle): string {
@@ -601,6 +626,53 @@ function getMissionShadow(mission: Mission): string {
   return "依頼人も全部は話していない。報酬だけ見て飛びつくと、あとで嫌な顔をすることになる。";
 }
 
+function getMissionEntryMode(mission: Mission): "staff_report" | "adventurer_pitch" | "client_visit" {
+  if (mission.category === "delivery") {
+    return "staff_report";
+  }
+  if (mission.category === "recovery") {
+    return "adventurer_pitch";
+  }
+  return "client_visit";
+}
+
+function summarizeBriefingIntent(intent: string): string {
+  const normalized = intent.trim();
+  if (!normalized) {
+    return "主はまだ返事を急がず、相手の出方を見ている。";
+  }
+  if (/(危|慎重|様子|急が)/.test(normalized)) {
+    return "主は即答を避け、危ない筋がないか先に洗いたい顔をしている。";
+  }
+  if (/(金|報酬|割|見合)/.test(normalized)) {
+    return "主は条件が見合うかを先に量り、安売りする気はない。";
+  }
+  if (/(信用|怪|胡散臭|疑)/.test(normalized)) {
+    return "主は相手を丸ごと信じず、言葉の継ぎ目を確かめるつもりでいる。";
+  }
+  if (/(受け|やる|進め)/.test(normalized)) {
+    return "主は受ける方向で考えているが、誰を出すかまではまだ決め切っていない。";
+  }
+  return "主は返答の角度を探っている。言い方ひとつで、場の空気が変わると知っている。";
+}
+
+function summarizeCastingIntent(intent: string): string {
+  const normalized = intent.trim();
+  if (!normalized) {
+    return "顔ぶれの決め手はまだない。誰に声をかけるかで、空気も結果も変わる。";
+  }
+  if (/(休|無理|温存|疲)/.test(normalized)) {
+    return "主は無理をさせない編成を考えている。足りないぶんは、別の誰かに背負わせることになる。";
+  }
+  if (/(速|急|押し|強引)/.test(normalized)) {
+    return "主は多少荒くても、話を前へ動かす顔ぶれを探している。";
+  }
+  if (/(相性|組|噛み合|一緒)/.test(normalized)) {
+    return "主は能力だけでなく、並べた時の空気を重く見ている。";
+  }
+  return "主は今回の運び方に筋を通したいと思っている。誰を前に出すかで、その筋が決まる。";
+}
+
 function getCharacterReaction(character: Character, mission: Mission): string {
   if (character.character_id === "char_shion") {
     if (mission.category === "delivery") return "短くうなずく。危ない運びでも、前に立つ役なら自分だと思っている顔だ。";
@@ -626,28 +698,84 @@ function getCharacterReaction(character: Character, mission: Mission): string {
   return character.public_digest;
 }
 
-function buildBriefingFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const alternatives = getOpenMissions().filter((entry) => entry.mission_id !== mission.mission_id);
   const recentNotes = getRecentNotes(1);
 
   return {
     narration_lines: [
-      `${uiState.state.base.summary}。朝一番、机の上には今日の案件が積まれている。`,
+      `${uiState.state.base.summary}。朝の空気はまだ重いが、机の上の端末だけは先に働き始めている。`,
       advisor
-        ? `${advisor.name}が帳面をめくり、その中から一件だけこちらへ寄せてきた。`
-        : "古い端末の通知だけが、今日の仕事の気配を告げている。",
-      `表に出てきたのは「${mission.display_name}」。依頼人は${getMissionClientName(mission)}、報酬は ${getRewardText(mission)}。`,
+        ? `${advisor.name}が帳面を片手に立ち、今日は一件、先に話しておきたいとだけ言う。`
+        : "通知灯が一つ点きっぱなしだ。誰かが返事を待っているらしい。",
+      `今日いちばん表に出てきた話は「${mission.display_name}」だ。`,
       getMissionScaleText(mission),
     ],
-    advisor_lines: advisor
-      ? [getMissionLead(mission), `見返りは ${getRewardText(mission)}。ただ、${getMissionShadow(mission)}`]
-      : [],
+    advisor_lines: advisor ? ["まずは話を聞く。受けるかどうかを決めるのは、そのあとでいい。"] : [],
     aside_lines: [
-      ...(alternatives.length > 0
-        ? [`ほかにも ${alternatives.length} 件、保留の案件がある。${alternatives[0]?.display_name ?? ""} もまだ残っている。`]
-        : []),
+      ...(alternatives.length > 0 ? [`脇にはまだ ${alternatives.length} 件ほど話が残っている。`] : []),
       ...(recentNotes.length > 0 ? [`昨夜のメモ: ${recentNotes[0]}`] : []),
     ],
+    character_lines: [],
+  };
+}
+
+function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+  const entryMode = getMissionEntryMode(mission);
+
+  if (entryMode === "staff_report") {
+    return {
+      narration_lines: [
+        `${advisor?.name ?? "帳場"}が机に薄いファイルを置く。港湾労務連合から、返事の早い仕事が来ている。`,
+        `仕事は「${mission.display_name}」。${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}`,
+        `依頼人は ${getMissionClientName(mission)}。報酬は ${getRewardText(mission)}。`,
+      ],
+      advisor_lines: advisor ? [getMissionLead(mission), getMissionShadow(mission)] : [],
+      aside_lines: [`ざっくりした危うさ: ${getRiskText(mission)}`],
+      character_lines: [],
+    };
+  }
+
+  if (entryMode === "adventurer_pitch") {
+    return {
+      narration_lines: [
+        `先に口を開いたのは依頼主ではない。ギルドの側から「${mission.display_name}」の話が持ち込まれる。`,
+        `${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}`,
+        `報酬は ${getRewardText(mission)}。額だけ見れば悪くないが、筋はだいぶきな臭い。`,
+      ],
+      advisor_lines: advisor ? ["拾える話ではある。ただ、拾った時点でこっちも泥をかぶる。"] : [],
+      aside_lines: [`依頼人の名義は ${getMissionClientName(mission)}。${getRiskText(mission)}`],
+      character_lines: [],
+    };
+  }
+
+  return {
+    narration_lines: [
+      `来客用の椅子に、先方が先に腰を下ろしている。持ち込まれたのは「${mission.display_name}」。`,
+      `${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}`,
+      `依頼人は ${getMissionClientName(mission)}。見返りは ${getRewardText(mission)}。`,
+    ],
+    advisor_lines: advisor ? ["話は筋が通っている。ただ、相手が全部を出している顔ではない。"] : [],
+    aside_lines: [`ざっくりした危うさ: ${getRiskText(mission)}`],
+    character_lines: [],
+  };
+}
+
+function buildDecisionFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
+  return {
+    narration_lines: [
+      "話の輪郭は見えた。ここで頷くか、もう少しだけ相手の腹を探るかを決める番だ。",
+      summarizeBriefingIntent(uiState.briefingIntent),
+      `報酬は ${getRewardText(mission)}。ただし、${getMissionShadow(mission)}`,
+    ],
+    advisor_lines: advisor
+      ? [
+          uiState.briefingIntent.trim()
+            ? "言い方は任せる。ただ、引けない約束だけは先に作らないで。"
+            : "返事を急ぐ理由は向こうにある。こちらまで急ぐ必要はない。",
+        ]
+      : [],
+    aside_lines: [`この場で決めること: 受けるか、保留するか、誰の意見を聞くか。`],
     character_lines: [],
   };
 }
@@ -663,6 +791,7 @@ function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | nu
     narration_lines: [
       "依頼の中身はだいたい見えた。次は誰に行ってもらうかを決める番だ。",
       `人数を増やせば安心という仕事でもない。顔ぶれは ${maxPartySize} 人までに絞る。`,
+      summarizeCastingIntent(uiState.castingIntent),
     ],
     advisor_lines: advisor ? [getMissionShadow(mission)] : [],
     aside_lines: [
@@ -728,14 +857,31 @@ function renderDialogueLine(speaker: string, text: string): string {
 
 function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): string {
   const sceneKey = getBriefingSceneKey(mission);
-  const fallbackPack = buildBriefingFallbackPack(mission, advisor);
+  const fallbackPack =
+    uiState.briefingStep === "morning"
+      ? buildMorningFallbackPack(mission, advisor)
+      : uiState.briefingStep === "entry"
+        ? buildEntryFallbackPack(mission, advisor)
+        : buildDecisionFallbackPack(mission, advisor);
   const scenePack = getCachedScenePack(sceneKey) ?? fallbackPack;
   const warning = uiState.sceneTextWarnings[sceneKey];
+  const heading =
+    uiState.briefingStep === "morning"
+      ? "朝の導入"
+      : uiState.briefingStep === "entry"
+        ? "依頼の入口"
+        : "受諾判断";
+  const title =
+    uiState.briefingStep === "morning"
+      ? "今日はどこから話を聞くか"
+      : uiState.briefingStep === "entry"
+        ? mission.display_name
+        : `${mission.display_name} をどう受けるか`;
 
   return `
     <div class="story-card">
-      <div class="scene-label">朝の机</div>
-      <h2>${mission.display_name}</h2>
+      <div class="scene-label">${heading}</div>
+      <h2>${title}</h2>
       ${renderSceneLines(scenePack.narration_lines)}
       ${
         advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""
@@ -743,7 +889,22 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
       ${
         scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")
       }
-      <p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>
+      ${
+        uiState.briefingStep !== "morning"
+          ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>`
+          : ""
+      }
+      ${
+        uiState.briefingStep === "decision"
+          ? `
+            <section class="intent-panel">
+              <div class="scene-note strong">主の返し方メモ</div>
+              <p class="small muted">そのままの台詞ではなく、どう返したいかだけを書きます。</p>
+              <textarea class="textarea" data-action="briefing-intent" placeholder="例: すぐには頷かず、条件だけ先に確かめたい">${uiState.briefingIntent}</textarea>
+            </section>
+          `
+          : ""
+      }
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
@@ -765,6 +926,11 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
       ${renderSceneLines(scenePack.narration_lines)}
       ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
       ${scenePack.aside_lines.map((line) => `<div class="scene-note">${line}</div>`).join("")}
+      <section class="intent-panel">
+        <div class="scene-note strong">今回の回し方</div>
+        <p class="small muted">誰を消耗させたくないか、何を優先したいかだけを短く置く。</p>
+        <textarea class="textarea" data-action="casting-intent" placeholder="例: 無理を押さずに、退路を作れる顔ぶれにしたい">${uiState.castingIntent}</textarea>
+      </section>
       ${
         selectedCharacters.length > 0
           ? `<div class="line-stack">${selectedCharacters
@@ -827,7 +993,7 @@ function renderRoster(mission: Mission): string {
             <strong>${character.name}</strong>
             <span class="tag">${character.role}</span>
           </div>
-          <p>${selected ? "声をかけた。" : "まだ呼んでいない。"} ${
+          <p>${selected ? "すでに話を通した。" : "この件を持ちかけるなら、こんな顔をする。"} ${
             getSceneCharacterLine(scenePack, character.character_id) ?? getCharacterReaction(character, mission)
           }</p>
           <div class="small muted">${getConditionText(character)} / 顔ぶれは ${maxPartySize} 人まで</div>
@@ -931,11 +1097,31 @@ function renderActions(mission: Mission | null): string {
   }
 
   if (uiState.scene === "briefing") {
+    if (uiState.briefingStep === "morning") {
+      return `
+        <div class="action-row">
+          <button data-action="open-entry" ${disabled}>今日の話を聞く</button>
+          <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
+          <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
+        </div>
+      `;
+    }
+
+    if (uiState.briefingStep === "entry") {
+      return `
+        <div class="action-row">
+          <button data-action="open-decision" ${disabled}>返事の段取りを決める</button>
+          <button class="secondary" data-action="back-to-morning" ${disabled}>朝の導入へ戻る</button>
+          <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
+        </div>
+      `;
+    }
+
     return `
       <div class="action-row">
-        <button data-action="enter-casting" ${disabled}>この件の段取りを詰める</button>
-        <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
-        <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
+        <button data-action="enter-casting" ${disabled}>この件を受ける方向で進める</button>
+        <button class="secondary" data-action="back-to-entry" ${disabled}>もう少し話を聞く</button>
+        <button class="secondary" data-action="next-mission" ${disabled}>いったん保留して別の案件を見る</button>
       </div>
     `;
   }
@@ -980,7 +1166,7 @@ function renderMainStage(): string {
     return `
       ${renderCastingScene(mission, advisor)}
       <section class="roster-panel">
-        <div class="scene-label">呼びかけ先</div>
+        <div class="scene-label">誰に声をかけるか</div>
         <div class="choice-stack">
           ${renderRoster(mission)}
         </div>
@@ -1010,11 +1196,17 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
   }
 
   if (uiState.scene === "briefing") {
-    const fallback = buildBriefingFallbackPack(mission, advisor);
+    const fallback =
+      uiState.briefingStep === "morning"
+        ? buildMorningFallbackPack(mission, advisor)
+        : uiState.briefingStep === "entry"
+          ? buildEntryFallbackPack(mission, advisor)
+          : buildDecisionFallbackPack(mission, advisor);
     return {
       key: getBriefingSceneKey(mission),
       request: {
         stage: "briefing",
+        scene_variant: uiState.briefingStep,
         mission,
         advisor: advisor
           ? {
@@ -1027,6 +1219,7 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
         characters: [],
         reward_text: getRewardText(mission),
         risk_text: getRiskText(mission),
+        player_intent: uiState.briefingStep === "decision" ? uiState.briefingIntent.trim() : undefined,
         recent_notes: getRecentNotes(2),
         recent_reports: getRecentReports(2).map((report) => report.text),
         fallback,
@@ -1040,6 +1233,7 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
       key: getCastingSceneKey(mission),
       request: {
         stage: "casting",
+        scene_variant: "assignment_consultation",
         mission,
         advisor: advisor
           ? {
@@ -1059,6 +1253,7 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
         })),
         reward_text: getRewardText(mission),
         risk_text: getRiskText(mission),
+        player_intent: uiState.castingIntent.trim() || undefined,
         fallback,
       },
     };
@@ -1139,6 +1334,10 @@ function render(): void {
     </div>
   `;
 
+  appRoot.querySelector("[data-action='open-entry']")?.addEventListener("click", () => enterBriefingStep("entry"));
+  appRoot.querySelector("[data-action='open-decision']")?.addEventListener("click", () => enterBriefingStep("decision"));
+  appRoot.querySelector("[data-action='back-to-morning']")?.addEventListener("click", () => enterBriefingStep("morning"));
+  appRoot.querySelector("[data-action='back-to-entry']")?.addEventListener("click", () => enterBriefingStep("entry"));
   appRoot.querySelector("[data-action='enter-casting']")?.addEventListener("click", enterCasting);
   appRoot.querySelector("[data-action='back-to-briefing']")?.addEventListener("click", returnToBriefing);
   appRoot.querySelector("[data-action='back-to-casting']")?.addEventListener("click", () => {
@@ -1154,6 +1353,26 @@ function render(): void {
   });
   appRoot.querySelector("[data-action='full-reset']")?.addEventListener("click", () => {
     void fullReset();
+  });
+  appRoot.querySelector<HTMLTextAreaElement>("[data-action='briefing-intent']")?.addEventListener("input", (event) => {
+    const target = event.currentTarget as HTMLTextAreaElement | null;
+    if (!target) return;
+    uiState.briefingIntent = target.value;
+    if (mission) {
+      delete uiState.sceneTextCache[getBriefingSceneKey(mission)];
+      delete uiState.sceneTextWarnings[getBriefingSceneKey(mission)];
+    }
+    render();
+  });
+  appRoot.querySelector<HTMLTextAreaElement>("[data-action='casting-intent']")?.addEventListener("input", (event) => {
+    const target = event.currentTarget as HTMLTextAreaElement | null;
+    if (!target) return;
+    uiState.castingIntent = target.value;
+    if (mission) {
+      delete uiState.sceneTextCache[getCastingSceneKey(mission)];
+      delete uiState.sceneTextWarnings[getCastingSceneKey(mission)];
+    }
+    render();
   });
 
   appRoot.querySelectorAll<HTMLElement>("[data-action='toggle-character']").forEach((button) => {

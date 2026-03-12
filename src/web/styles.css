@@ -221,6 +221,12 @@ button:disabled {
   gap: 10px;
 }
 
+.intent-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .note-option {
   display: flex;
   gap: 10px;
@@ -249,6 +255,10 @@ button:disabled {
 .archive-entry,
 .echo-line {
   padding: 12px 14px;
+}
+
+.archive-entry p {
+  margin: 0;
 }
 
 .archive-entry strong {

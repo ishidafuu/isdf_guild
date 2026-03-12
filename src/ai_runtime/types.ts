@@ -53,6 +53,7 @@ export type SceneTextPack = {
 
 export type SceneGenerationRequest = {
   stage: SceneStage;
+  scene_variant?: string;
   mission: Mission;
   advisor?: {
     character_id: Character["character_id"];
@@ -71,6 +72,7 @@ export type SceneGenerationRequest = {
   report?: Report;
   reward_text?: string;
   risk_text?: string;
+  player_intent?: string;
   recent_notes?: string[];
   recent_reports?: string[];
   fallback: SceneTextPack;
