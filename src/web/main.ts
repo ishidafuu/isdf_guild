@@ -855,6 +855,19 @@ function renderDialogueLine(speaker: string, text: string): string {
   return `<p class="story-line dialogue"><span class="speaker">${speaker}</span>「${text}」</p>`;
 }
 
+function renderSceneLoadingNote(sceneKey: string): string {
+  if (!isSceneLoading(sceneKey)) {
+    return "";
+  }
+
+  return `
+    <div class="scene-note loading-note">
+      <strong>AI文章を生成中です。</strong>
+      <div class="small muted">いま表示している文は仮の文面です。でき次第、この場面の文章を差し替えます。</div>
+    </div>
+  `;
+}
+
 function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): string {
   const sceneKey = getBriefingSceneKey(mission);
   const fallbackPack =
@@ -905,6 +918,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
           `
           : ""
       }
+      ${renderSceneLoadingNote(sceneKey)}
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
@@ -931,6 +945,7 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
         <p class="small muted">誰を消耗させたくないか、何を優先したいかだけを短く置く。</p>
         <textarea class="textarea" data-action="casting-intent" placeholder="例: 無理を押さずに、退路を作れる顔ぶれにしたい">${uiState.castingIntent}</textarea>
       </section>
+      ${renderSceneLoadingNote(sceneKey)}
       ${
         selectedCharacters.length > 0
           ? `<div class="line-stack">${selectedCharacters
@@ -975,6 +990,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
       </div>
       ${advisor ? scenePack.advisor_lines.map((line) => renderDialogueLine(advisor.name, line)).join("") : ""}
       ${scenePack.aside_lines.length > 0 ? `<div class="line-stack">${scenePack.aside_lines.map((line) => `<div class="echo-line">${line}</div>`).join("")}</div>` : ""}
+      ${renderSceneLoadingNote(sceneKey)}
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;

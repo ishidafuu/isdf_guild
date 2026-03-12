@@ -163,6 +163,16 @@ button:disabled {
   font-weight: 700;
 }
 
+.loading-note {
+  border-color: rgba(223, 255, 67, 0.22);
+  background: rgba(223, 255, 67, 0.06);
+}
+
+.loading-note strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;
