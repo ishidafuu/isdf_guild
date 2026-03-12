@@ -21,20 +21,32 @@ import { stateToStorageData, storageDataToState } from "../storage_v2/transactio
 import type { MissionCycleState, NoteCandidateSet, PreMissionConversation } from "../core/mission_flow/types";
 import { clearAiTextCache, requestAiGuildmasterNotes, requestAiReport, requestAiScene } from "../ai_runtime/browserClient";
 import type { SceneGenerationRequest, SceneTextPack } from "../ai_runtime/types";
+import {
+  buildAssignmentOptions,
+  getClaimCharacterForMission,
+  getFeaturedCharactersForMission,
+  type AssignmentOption,
+} from "./assignmentOptions";
+import {
+  getAftermathCharacterBanter,
+  getAftermathCrossTalk,
+  getBriefingCharacterLine,
+  getBriefingCrossTalk,
+  getCastingCrossTalk,
+  getCharacterReaction,
+  getMissionEntryMode,
+  getMissionLead,
+  getMissionShadow,
+  getMorningClaimPitch,
+  getSelectedCharacterBanter,
+  getStaffClaimReply,
+  summarizeCastingIntent,
+} from "./sceneWriting";
 
 const STORAGE_KEY = "isdf_guild_web_state_v1";
 
 type SceneMode = "briefing" | "casting" | "aftermath";
 type BriefingStep = "morning" | "board";
-
-type AssignmentOption = {
-  option_id: string;
-  label: string;
-  summary: string;
-  staff_note: string;
-  character_ids: Character["character_id"][];
-  intent: string;
-};
 
 type PreparedCycle = {
   mission: Mission;
@@ -285,22 +297,6 @@ function returnToBriefing(): void {
   render();
 }
 
-function toggleCharacter(characterId: Character["character_id"]): void {
-  const mission = getSelectedMission();
-  if (!mission) return;
-
-  const maxPartySize = mission.participants?.max_party_size ?? 3;
-  const exists = uiState.selectedCharacterIds.includes(characterId);
-  if (exists) {
-    uiState.selectedCharacterIds = uiState.selectedCharacterIds.filter((id) => id !== characterId);
-  } else if (uiState.selectedCharacterIds.length < maxPartySize) {
-    uiState.selectedCharacterIds = [...uiState.selectedCharacterIds, characterId];
-  }
-
-  uiState.preparedCycle = null;
-  render();
-}
-
 function resetGame(): void {
   window.localStorage.removeItem(STORAGE_KEY);
   const reset = createDefaultUiState();
@@ -523,7 +519,9 @@ async function launchAssignmentOption(optionId: string): Promise<void> {
   const advisor = getAdvisor();
   if (!mission) return;
 
-  const option = buildAssignmentOptions(mission, advisor).find((entry) => entry.option_id === optionId);
+  const option = buildAssignmentOptions(mission, advisor, getAvailableCharacters()).find(
+    (entry) => entry.option_id === optionId
+  );
   if (!option) return;
 
   uiState.selectedAssignmentOptionId = optionId;
@@ -734,98 +732,6 @@ function getRecentReports(limit = 3): Report[] {
   return uiState.state.reports.slice(-limit).reverse();
 }
 
-function getMissionLead(mission: Mission): string {
-  if (mission.category === "delivery") {
-    return "夜明け前までに荷を通す仕事。派手じゃないけど、止まると一気に面倒になる。";
-  }
-  if (mission.category === "negotiation") {
-    return "揉めてる連中をなだめる仕事。誰を前に出すかで、話が早く済むか長引くかが変わる。";
-  }
-  return "企業区画でログを抜く仕事。うまくやっても、だいたい何かしら面倒は残る。";
-}
-
-function getMissionShadow(mission: Mission): string {
-  if (mission.category === "delivery") {
-    return "締切が短い。もたつくほど検問が増えて笑えなくなる。";
-  }
-  if (mission.category === "negotiation") {
-    return "片方の顔を立てすぎると、もう片方があとでへそを曲げる。";
-  }
-  return "依頼人も全部は話していない。報酬だけ見て飛びつくと、あとで嫌な顔をすることになる。";
-}
-
-function getMissionEntryMode(mission: Mission): "staff_report" | "adventurer_pitch" | "client_visit" {
-  if (mission.category === "delivery") {
-    return "staff_report";
-  }
-  if (mission.category === "recovery") {
-    return "adventurer_pitch";
-  }
-  return "client_visit";
-}
-
-function summarizeBriefingIntent(intent: string): string {
-  const normalized = intent.trim();
-  if (!normalized) {
-    return "主はまだ返事を急がず、相手の出方を見ている。";
-  }
-  if (/(危|慎重|様子|急が)/.test(normalized)) {
-    return "主は即答を避け、危ない筋がないか先に洗いたい顔をしている。";
-  }
-  if (/(金|報酬|割|見合)/.test(normalized)) {
-    return "主は条件が見合うかを先に量り、安売りする気はない。";
-  }
-  if (/(信用|怪|胡散臭|疑)/.test(normalized)) {
-    return "主は相手を丸ごと信じず、言葉の継ぎ目を確かめるつもりでいる。";
-  }
-  if (/(受け|やる|進め)/.test(normalized)) {
-    return "主は受ける方向で考えているが、誰を出すかまではまだ決め切っていない。";
-  }
-  return "主は返答の角度を探っている。言い方ひとつで、場の空気が変わると知っている。";
-}
-
-function summarizeCastingIntent(intent: string): string {
-  const normalized = intent.trim();
-  if (!normalized) {
-    return "顔ぶれの決め手はまだない。誰に声をかけるかで、空気も結果も変わる。";
-  }
-  if (/(休|無理|温存|疲)/.test(normalized)) {
-    return "主は無理をさせない編成を考えている。足りないぶんは、別の誰かに背負わせることになる。";
-  }
-  if (/(速|急|押し|強引)/.test(normalized)) {
-    return "主は多少荒くても、話を前へ動かす顔ぶれを探している。";
-  }
-  if (/(相性|組|噛み合|一緒)/.test(normalized)) {
-    return "主は能力だけでなく、並べた時の空気を重く見ている。";
-  }
-  return "主は今回の運び方に筋を通したいと思っている。誰を前に出すかで、その筋が決まる。";
-}
-
-function getCharacterReaction(character: Character, mission: Mission): string {
-  if (character.character_id === "char_shion") {
-    if (mission.category === "delivery") return "短くうなずく。危ない運びでも、前に立つ役なら自分だと思っている顔だ。";
-    if (mission.category === "recovery") return "表情は薄いが、企業区画と聞いた時だけ少しだけ目つきが固くなる。";
-    return "相変わらず口数は少ない。ただ、断る時の空気ではない。";
-  }
-  if (character.character_id === "char_mina") {
-    if (mission.category === "recovery") return "端末を閉じる指先が少し強い。企業絡みだと、だいたい機嫌がよくない。";
-    if (mission.category === "delivery") return "荷より先に経路の雑さを気にしている。受けるなら準備はちゃんとやりたいらしい。";
-    return "依頼人の名前を聞いた時だけ視線が冷える。わかりやすいと言えばわかりやすい。";
-  }
-  if (character.character_id === "char_gai") {
-    if (mission.category === "negotiation") return "口元だけで笑う。面倒な仲裁ほど、自分の出番だとわかっている顔だ。";
-    return "軽口を挟む。余裕があるというより、そうやって場を軽くする癖だ。";
-  }
-  if (character.character_id === "char_nora") {
-    if (mission.category === "recovery") return "先に退路を気にしている。まだ現場も見ていないのに、もう出口の心配をしている。";
-    return "返事は小さい。でも嫌な予感がある時ほど、逆に静かになる。";
-  }
-  if (character.character_id === "char_iza") {
-    return "すぐには断らない。誰かの穴埋めだと、なおさら引き受けがちだ。";
-  }
-  return character.public_digest;
-}
-
 function getCharacterName(characterId: Character["character_id"]): string {
   return uiState.state.characters.find((character) => character.character_id === characterId)?.name ?? characterId;
 }
@@ -838,252 +744,10 @@ function getSpeakerClass(characterId?: Character["character_id"] | null): string
   return `speaker-${characterId.split("_").join("-")}`;
 }
 
-function getFeaturedCharactersForMission(mission: Mission, limit = 2): Character[] {
-  const recommendedRoles = mission.participants?.recommended_roles ?? [];
-  const available = getAvailableCharacters();
-  const matched = available.filter((character) => recommendedRoles.includes(character.role));
-  const ordered = matched.length > 0 ? matched : available;
-  return ordered.slice(0, limit);
-}
-
-function getClaimCharacterForMission(mission: Mission): Character {
-  const featured = getFeaturedCharactersForMission(mission, 1);
-  return featured[0] ?? getAvailableCharacters()[0] ?? uiState.state.characters[0];
-}
-
-function pickCharactersForRoles(
-  roles: Character["role"][],
-  limit: number,
-  excluded: Character["character_id"][] = []
-): Character["character_id"][] {
-  const available = getAvailableCharacters().filter((character) => !excluded.includes(character.character_id));
-  const picked: Character["character_id"][] = [];
-
-  for (const role of roles) {
-    const match = available.find(
-      (character) => character.role === role && !picked.includes(character.character_id)
-    );
-    if (match) {
-      picked.push(match.character_id);
-    }
-  }
-
-  for (const character of available) {
-    if (picked.length >= limit) {
-      break;
-    }
-    if (!picked.includes(character.character_id)) {
-      picked.push(character.character_id);
-    }
-  }
-
-  return picked.slice(0, limit);
-}
-
-function buildAssignmentOptions(mission: Mission, advisor: StaffCharacter | null): AssignmentOption[] {
-  const limit = mission.participants?.max_party_size ?? 3;
-  const recommended = mission.participants?.recommended_roles ?? [];
-  const primary = pickCharactersForRoles(recommended, limit);
-  const reverse = pickCharactersForRoles([...recommended].reverse(), limit);
-  const pressure = pickCharactersForRoles(["frontliner", "negotiator", "engineer", "scout", "support"], limit);
-  const careful = pickCharactersForRoles(["scout", "support", "engineer", "negotiator", "frontliner"], limit);
-
-  return [
-    {
-      option_id: "steady",
-      label: "堅実に回す",
-      summary: "相性と役割を素直に見て、無理の少ない顔ぶれで回す。",
-      staff_note: advisor ? `${advisor.name}はこの案なら大崩れしにくいと見ている。` : "無難に通すならこの筋だ。",
-      character_ids: primary,
-      intent: "無理を押さず、役割が噛み合う顔ぶれで進めたい。",
-    },
-    {
-      option_id: "fast",
-      label: "速さを優先する",
-      summary: "多少荒くても手の早い面子で押し込み、仕事を先に終わらせに行く。",
-      staff_note: advisor ? `${advisor.name}は急ぎ筋だと認めるが、あとで誰かが疲れると見ている。` : "短く終わるか、短く燃えるかの二択だ。",
-      character_ids: pressure,
-      intent: "多少荒くても、先に動いて主導権を取りたい。",
-    },
-    {
-      option_id: "careful",
-      label: "退路を厚くする",
-      summary: "危ない時に引ける形を優先し、慎重な組み方で事故を減らす。",
-      staff_note: advisor ? `${advisor.name}はこの案なら取り返しのつかない崩れ方は避けやすいと見ている。` : "派手さはないが、帰ってくる確率は上がる。",
-      character_ids: careful,
-      intent: "派手さより、引き際と退路を優先したい。",
-    },
-    {
-      option_id: "strained",
-      label: "噛み合わせを賭ける",
-      summary: "少し不安はあるが、今の流れに乗せるならこの顔ぶれだと賭ける。",
-      staff_note: advisor ? `${advisor.name}は止めはしないが、あとで空気が荒れる可能性は見ている。` : "通れば大きいが、後味は読みにくい。",
-      character_ids: reverse,
-      intent: "多少の相性不安は飲んで、今いちばん仕事を動かせる面子に賭けたい。",
-    },
-  ];
-}
-
-function getBriefingCharacterLine(character: Character, mission: Mission): string {
-  if (character.character_id === "char_gai") {
-    return mission.category === "negotiation"
-      ? "椅子の背に寄りかかる。『話をまとめるだけなら軽い。軽く済めば、だけど』"
-      : "肩をすくめる。『金の匂いはする。ついでに面倒の匂いもするけどな』";
-  }
-  if (character.character_id === "char_mina") {
-    return mission.category === "recovery"
-      ? "端末から目を上げる。『企業絡みなら、雑な説明を真に受けない方がいい』"
-      : "資料を見て眉をひそめる。『準備不足で押すなら、誰かが後で泣く』";
-  }
-  if (character.character_id === "char_shion") {
-    return "壁際から一度だけうなずく。『受けるなら、引き方だけ先に決めておけ』";
-  }
-  if (character.character_id === "char_nora") {
-    return "目線は低いままだ。『嫌な感じはある。たぶん、入口より出口で困る』";
-  }
-  return "短く息を吐く。仕事の匂いだけは、もう十分に伝わっている。";
-}
-
-function getSelectedCharacterBanter(character: Character, mission: Mission): string {
-  if (character.character_id === "char_shion") {
-    return mission.category === "delivery"
-      ? "腕を組んで立つ。『運ぶだけなら運ぶ。ただ、止められた時の方が面倒だ』"
-      : "視線だけで返す。『前に出る役が要るならやる。無茶はさせるな』";
-  }
-  if (character.character_id === "char_mina") {
-    return mission.category === "recovery"
-      ? "端末を叩きながら言う。『抜くなら抜くでいい。雑に入るなら私は行かない』"
-      : "肩越しに言葉を投げる。『準備に時間をくれるなら動ける。根性論なら却下』";
-  }
-  if (character.character_id === "char_gai") {
-    return "笑っているが目は仕事の方を向いている。『揉めたらしゃべる。しゃべって駄目なら、その時考える』";
-  }
-  if (character.character_id === "char_nora") {
-    return "小さく首を振る。『退路だけは先にほしい。あとで探すのは遅い』";
-  }
-  return "少し間を置いてから返す。『足りない穴埋めならやる。雑に投げるなら考える』";
-}
-
-function getAftermathCharacterBanter(character: Character, mission: Mission, result: string): string {
-  if (character.character_id === "char_gai") {
-    return result === "failure"
-      ? "乾いた笑いだけが先に出る。『笑えない方の外し方だな。次はもう少しマシにやる』"
-      : "片手を上げる。『ほらな、面倒は面倒でも片づかない面倒じゃなかった』";
-  }
-  if (character.character_id === "char_mina") {
-    return result === "failure"
-      ? "額を押さえる。『言った通り、雑に入るとこうなる』"
-      : "端末を閉じる。『終わった。気持ちよくはないけど、終わっただけ上等』";
-  }
-  if (character.character_id === "char_shion") {
-    return result === "failure"
-      ? "短く言う。『押し切れなかった。次は押し方を変える』"
-      : "壁にもたれる。『戻った。それで十分だろ』";
-  }
-  if (character.character_id === "char_nora") {
-    return result === "failure"
-      ? "声が小さい。『やっぱり出口が狭かった』"
-      : "ようやく肩を落とす。『帰れた。今日はそれでいい』";
-  }
-  return result === "failure" ? "疲れを隠しきれない。『次はもう少し、うまくやる』" : "息をつく。『片づいたなら、それでいい』";
-}
-
-function getBriefingCrossTalk(mission: Mission, advisor: StaffCharacter | null): Array<{
-  character_id?: Character["character_id"];
-  speaker: string;
-  text: string;
-}> {
-  const featured = getFeaturedCharactersForMission(mission, 2);
-  const lines: Array<{ character_id?: Character["character_id"]; speaker: string; text: string }> = [];
-
-  if (advisor) {
-    lines.push({
-      character_id: advisor.character_id,
-      speaker: advisor.name,
-      text:
-        mission.category === "delivery"
-          ? "急ぎの返事を欲しがってる。急いで受けるのと、雑に受けるのは別だからね。"
-          : mission.category === "negotiation"
-            ? "話は丸い。でも持ってきた顔が丸い時ほど、後ろで角が立ってる。"
-            : "大きい額が出てる。大きい額を出す時は、向こうも急いでると思って。"
-    });
-  }
-
-  for (const character of featured) {
-    lines.push({
-      character_id: character.character_id,
-      speaker: character.name,
-      text: getBriefingCharacterLine(character, mission),
-    });
-  }
-
-  return lines.slice(0, 3);
-}
-
-function getMorningClaimPitch(mission: Mission, character: Character): string {
-  if (character.character_id === "char_gai") {
-    return `「${mission.display_name}、手触りは悪くない。揉めるなら揉めるで、口を挟む余地はある」`;
-  }
-  if (character.character_id === "char_mina") {
-    return `「${mission.display_name} は気になる。雑に受けるなら反対、段取りを詰めるなら話は別」`;
-  }
-  if (character.character_id === "char_shion") {
-    return `「${mission.display_name}、受けるなら早めに決めろ。半端に引き延ばす方が危ない」`;
-  }
-  if (character.character_id === "char_nora") {
-    return `「${mission.display_name}、出口が見えるならやれる。見えないなら嫌だ」`;
-  }
-  return `「${mission.display_name} は回せる。足りない穴埋めならこちらでやる」`;
-}
-
-function getStaffClaimReply(mission: Mission, advisor: StaffCharacter | null): string {
-  if (!advisor) {
-    return "誰も止めない。だから余計に、止める理由を自分で拾う必要がある。";
-  }
-  if (mission.category === "delivery") {
-    return `${advisor.name}は帳面を閉じる。『急ぎたがる声が大きい。だからこそ、急ぐ理由は分けて考える』`;
-  }
-  if (mission.category === "negotiation") {
-    return `${advisor.name}は肩をすくめる。『口のうまい話は多い。片づける人間まで口がうまいとは限らない』`;
-  }
-  return `${advisor.name}は視線を上げない。『高い額には高い理由がある。たいがい嬉しくない方の理由だけど』`;
-}
-
-function getCastingCrossTalk(mission: Mission, selectedCharacters: Character[]): Array<{
-  character_id: Character["character_id"];
-  speaker: string;
-  text: string;
-}> {
-  const speakers = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
-  const lines = speakers.map((character) => ({
-    character_id: character.character_id,
-    speaker: character.name,
-    text: getSelectedCharacterBanter(character, mission),
-  }));
-
-  return lines.slice(0, 3);
-}
-
-function getAftermathCrossTalk(preparedCycle: PreparedCycle): Array<{
-  character_id: Character["character_id"];
-  speaker: string;
-  text: string;
-}> {
-  const result = preparedCycle.report.state_updates?.mission_result ?? "unknown";
-  return preparedCycle.characters_after_report
-    .filter((character) => preparedCycle.dispatch.assigned_character_ids.includes(character.character_id))
-    .slice(0, 3)
-    .map((character) => ({
-      character_id: character.character_id,
-      speaker: character.name,
-      text: `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, result)}`,
-    }));
-}
-
 function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const alternatives = getOpenMissions().filter((entry) => entry.mission_id !== mission.mission_id);
   const recentNotes = getRecentNotes(1);
-  const featuredCharacters = getFeaturedCharactersForMission(mission, 1);
+  const featuredCharacters = getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 1);
 
   return {
     narration_lines: [
@@ -1108,7 +772,7 @@ function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | nu
 
 function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const entryMode = getMissionEntryMode(mission);
-  const featuredCharacters = getFeaturedCharactersForMission(mission, 2);
+  const featuredCharacters = getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 2);
 
   if (entryMode === "staff_report") {
     return {
@@ -1157,35 +821,15 @@ function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null
   };
 }
 
-function buildDecisionFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
-  const featuredCharacters = getFeaturedCharactersForMission(mission, 1);
-  return {
-    narration_lines: [
-      "話の輪郭は見えた。ここで頷くか、もう少しだけ相手の腹を探るかを決める番だ。",
-      summarizeBriefingIntent(uiState.briefingIntent),
-      `報酬は ${getRewardText(mission)}。ただし、${getMissionShadow(mission)}`,
-    ],
-    advisor_lines: advisor
-      ? [
-          uiState.briefingIntent.trim()
-            ? "言い方は任せる。ただ、引けない約束だけは先に作らないで。"
-            : "返事を急ぐ理由は向こうにある。こちらまで急ぐ必要はない。",
-        ]
-      : [],
-    aside_lines: [`この場で決めること: 受けるか、保留するか、誰の意見を聞くか。`],
-    character_lines: featuredCharacters.map((character) => ({
-      character_id: character.character_id,
-      text: getBriefingCharacterLine(character, mission),
-    })),
-  };
-}
-
 function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | null): SceneTextPack {
   const maxPartySize = mission.participants?.max_party_size ?? 3;
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
-  const discussionCharacters = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
+  const discussionCharacters =
+    selectedCharacters.length > 0
+      ? selectedCharacters
+      : getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 3);
   const availableCharacters = getAvailableCharacters();
 
   return {
@@ -1242,7 +886,7 @@ function buildAftermathFallbackPack(preparedCycle: PreparedCycle, advisor: Staff
       : preparedCycle.pre_mission_conversation.map((line) => `${line.speaker_name}「${line.text}」`),
     character_lines: returningCharacters.map((character) => ({
       character_id: character.character_id,
-      text: `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, result)}`,
+      text: `${getConditionText(character)} ${getAftermathCharacterBanter(character, result)}`,
     })),
   };
 }
@@ -1284,7 +928,7 @@ function renderMorningClaimBoard(advisor: StaffCharacter | null): string {
       <div class="choice-stack">
         ${missions
           .map((mission) => {
-            const claimant = getClaimCharacterForMission(mission);
+            const claimant = getClaimCharacterForMission(mission, getAvailableCharacters(), uiState.state.characters);
             const selected = uiState.selectedMissionId === mission.mission_id;
             return `
               <button
@@ -1331,7 +975,11 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
   const warning = uiState.sceneTextWarnings[sceneKey];
   const heading = uiState.briefingStep === "morning" ? "朝の導入" : "案件の読み合わせ";
   const title = uiState.briefingStep === "morning" ? "届いた案件をさらう" : `${mission.display_name} を確認する`;
-  const crossTalk = getBriefingCrossTalk(mission, advisor);
+  const crossTalk = getBriefingCrossTalk(
+    mission,
+    advisor,
+    getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 2)
+  );
 
   return `
     <div class="story-card">
@@ -1371,9 +1019,16 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
-  const discussionCharacters = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
+  const discussionCharacters =
+    selectedCharacters.length > 0
+      ? selectedCharacters
+      : getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 3);
   const warning = uiState.sceneTextWarnings[sceneKey];
-  const crossTalk = getCastingCrossTalk(mission, selectedCharacters);
+  const crossTalk = getCastingCrossTalk(
+    mission,
+    selectedCharacters,
+    getFeaturedCharactersForMission(mission, getAvailableCharacters(), uiState.state.characters, 3)
+  );
 
   return `
     <div class="story-card">
@@ -1423,7 +1078,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
     preparedCycle.dispatch.assigned_character_ids.includes(character.character_id)
   );
   const warning = uiState.sceneTextWarnings[sceneKey];
-  const crossTalk = getAftermathCrossTalk(preparedCycle);
+  const crossTalk = getAftermathCrossTalk(preparedCycle, getConditionText);
 
   return `
     <div class="story-card">
@@ -1440,7 +1095,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
           character_id: character.character_id,
           text:
             getSceneCharacterLine(scenePack, character.character_id) ??
-            `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.mission, preparedCycle.report.state_updates?.mission_result ?? "unknown")}`,
+            `${getConditionText(character)} ${getAftermathCharacterBanter(character, preparedCycle.report.state_updates?.mission_result ?? "unknown")}`,
         }))
       )}
       ${
@@ -1461,31 +1116,8 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
   `;
 }
 
-function renderRoster(mission: Mission): string {
-  const maxPartySize = mission.participants?.max_party_size ?? 3;
-  const disabled = uiState.aiStatus?.loading ? "disabled" : "";
-  const scenePack = getCachedScenePack(getCastingSceneKey(mission));
-  return getAvailableCharacters()
-    .map((character) => {
-      const selected = uiState.selectedCharacterIds.includes(character.character_id);
-      return `
-        <button class="choice-card ${selected ? "selected" : ""}" data-action="toggle-character" data-character-id="${character.character_id}" ${disabled}>
-          <div class="choice-head">
-            <strong class="speaker ${getSpeakerClass(character.character_id)}">${character.name}</strong>
-            <span class="tag">${character.role}</span>
-          </div>
-          <p>${selected ? "すでに話を通した。" : "この件を持ちかけるなら、こんな顔をする。"} ${
-            getSceneCharacterLine(scenePack, character.character_id) ?? getCharacterReaction(character, mission)
-          }</p>
-          <div class="small muted">${getConditionText(character)} / 顔ぶれは ${maxPartySize} 人まで</div>
-        </button>
-      `;
-    })
-    .join("");
-}
-
 function renderAssignmentOptions(mission: Mission, advisor: StaffCharacter | null): string {
-  const options = buildAssignmentOptions(mission, advisor);
+  const options = buildAssignmentOptions(mission, advisor, getAvailableCharacters());
 
   return `
     <section class="roster-panel">
@@ -1929,9 +1561,6 @@ function render(): void {
     }
   });
 
-  appRoot.querySelectorAll<HTMLElement>("[data-action='toggle-character']").forEach((button) => {
-    button.addEventListener("click", () => toggleCharacter(button.dataset.characterId as Character["character_id"]));
-  });
   appRoot.querySelectorAll<HTMLInputElement>("[data-action='select-note']").forEach((radio) => {
     radio.addEventListener("change", () => {
       uiState.selectedNotes[radio.dataset.setId ?? ""] = radio.value;
@@ -1954,7 +1583,7 @@ function render(): void {
 
   if (uiState.scene === "casting" && mission) {
     const advisor = getAdvisor();
-    for (const option of buildAssignmentOptions(mission, advisor)) {
+    for (const option of buildAssignmentOptions(mission, advisor, getAvailableCharacters())) {
       void ensurePreparedCycle({
         mission,
         option,
