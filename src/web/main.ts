@@ -25,7 +25,16 @@ import type { SceneGenerationRequest, SceneTextPack } from "../ai_runtime/types"
 const STORAGE_KEY = "isdf_guild_web_state_v1";
 
 type SceneMode = "briefing" | "casting" | "aftermath";
-type BriefingStep = "morning" | "entry" | "decision";
+type BriefingStep = "morning" | "board";
+
+type AssignmentOption = {
+  option_id: string;
+  label: string;
+  summary: string;
+  staff_note: string;
+  character_ids: Character["character_id"][];
+  intent: string;
+};
 
 type PreparedCycle = {
   mission: Mission;
@@ -42,6 +51,7 @@ type UiState = {
   briefingStep: BriefingStep;
   selectedMissionId: Mission["mission_id"] | null;
   selectedCharacterIds: Character["character_id"][];
+  selectedAssignmentOptionId: string | null;
   briefingIntent: string;
   castingIntent: string;
   preparedCycle: PreparedCycle | null;
@@ -56,6 +66,8 @@ type UiState = {
   sceneTextCache: Record<string, SceneTextPack | undefined>;
   sceneTextWarnings: Record<string, string | undefined>;
   sceneTextLoadingKeys: string[];
+  preparedCycleCache: Record<string, PreparedCycle | undefined>;
+  preparedCycleLoadingKeys: string[];
 };
 
 function initializeState(): MissionCycleState {
@@ -99,6 +111,7 @@ function createDefaultUiState(): UiState {
     briefingStep: "morning",
     selectedMissionId: firstMission?.mission_id ?? null,
     selectedCharacterIds: [],
+    selectedAssignmentOptionId: null,
     briefingIntent: "",
     castingIntent: "",
     preparedCycle: null,
@@ -108,6 +121,8 @@ function createDefaultUiState(): UiState {
     sceneTextCache: {},
     sceneTextWarnings: {},
     sceneTextLoadingKeys: [],
+    preparedCycleCache: {},
+    preparedCycleLoadingKeys: [],
   };
 }
 
@@ -215,6 +230,7 @@ function cycleMission(direction: 1 | -1): void {
   const nextIndex = (baseIndex + direction + missions.length) % missions.length;
   uiState.selectedMissionId = missions[nextIndex]?.mission_id ?? null;
   uiState.selectedCharacterIds = [];
+  uiState.selectedAssignmentOptionId = null;
   uiState.briefingIntent = "";
   uiState.castingIntent = "";
   uiState.preparedCycle = null;
@@ -232,6 +248,7 @@ function selectMission(missionId: Mission["mission_id"]): void {
 
   uiState.selectedMissionId = missionId;
   uiState.selectedCharacterIds = [];
+  uiState.selectedAssignmentOptionId = null;
   uiState.briefingIntent = "";
   uiState.castingIntent = "";
   uiState.preparedCycle = null;
@@ -246,6 +263,7 @@ function enterBriefingStep(step: BriefingStep): void {
   if (!getSelectedMission()) return;
   uiState.scene = "briefing";
   uiState.briefingStep = step;
+  uiState.selectedAssignmentOptionId = null;
   uiState.preparedCycle = null;
   render();
 }
@@ -253,13 +271,14 @@ function enterBriefingStep(step: BriefingStep): void {
 function enterCasting(): void {
   if (!getSelectedMission()) return;
   uiState.scene = "casting";
+  uiState.selectedAssignmentOptionId = null;
   uiState.preparedCycle = null;
   render();
 }
 
 function returnToBriefing(): void {
   uiState.scene = "briefing";
-  uiState.briefingStep = "decision";
+  uiState.briefingStep = "board";
   uiState.preparedCycle = null;
   uiState.selectedNotes = {};
   uiState.userNotes = {};
@@ -290,6 +309,7 @@ function resetGame(): void {
   uiState.briefingStep = reset.briefingStep;
   uiState.selectedMissionId = reset.selectedMissionId;
   uiState.selectedCharacterIds = reset.selectedCharacterIds;
+  uiState.selectedAssignmentOptionId = reset.selectedAssignmentOptionId;
   uiState.briefingIntent = reset.briefingIntent;
   uiState.castingIntent = reset.castingIntent;
   uiState.preparedCycle = reset.preparedCycle;
@@ -299,6 +319,8 @@ function resetGame(): void {
   uiState.sceneTextCache = {};
   uiState.sceneTextWarnings = {};
   uiState.sceneTextLoadingKeys = [];
+  uiState.preparedCycleCache = {};
+  uiState.preparedCycleLoadingKeys = [];
   render();
 }
 
@@ -359,14 +381,11 @@ async function fullReset(): Promise<void> {
   render();
 }
 
-async function prepareCycle(): Promise<void> {
-  const mission = getSelectedMission();
-  if (!mission) return;
-  if (uiState.selectedCharacterIds.length === 0) {
-    window.alert("まず何人かに声をかけてください。");
-    return;
-  }
-
+async function buildPreparedCycle(input: {
+  mission: Mission;
+  selectedCharacterIds: Character["character_id"][];
+}): Promise<PreparedCycle> {
+  const mission = input.mission;
   const sequence = uiState.state.dispatches.length + 1;
   const decayedCharacters = decayLingerFlags(uiState.state.characters);
   const dispatch = buildManualDispatch({
@@ -376,7 +395,7 @@ async function prepareCycle(): Promise<void> {
     base: uiState.state.base,
     facilities: uiState.state.facilities,
     sequence,
-    selected_character_ids: uiState.selectedCharacterIds,
+    selected_character_ids: input.selectedCharacterIds,
     selected_facility_ids: uiState.state.base.facility_ids ?? [],
   });
   const assignedCharacters = decayedCharacters.filter((character) =>
@@ -401,12 +420,6 @@ async function prepareCycle(): Promise<void> {
     resolution,
     sequence,
   });
-  uiState.aiStatus = {
-    loading: true,
-    phase: "report",
-  };
-  render();
-
   let report = fallbackReport;
   const warnings: string[] = [];
 
@@ -423,22 +436,8 @@ async function prepareCycle(): Promise<void> {
     if (aiReport.meta.warning) {
       warnings.push(aiReport.meta.warning);
     }
-    uiState.aiStatus = {
-      loading: true,
-      phase: "guildmaster_note",
-      provider: aiReport.meta.provider,
-      warning: aiReport.meta.warning,
-    };
-    render();
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "report AI 接続に失敗しました。");
-    uiState.aiStatus = {
-      loading: true,
-      phase: "guildmaster_note",
-      provider: "fallback",
-      warning: warnings[warnings.length - 1],
-    };
-    render();
   }
 
   const charactersAfterReport = applyRelationshipUpdates({
@@ -464,23 +463,11 @@ async function prepareCycle(): Promise<void> {
     if (aiNotes.meta.warning) {
       warnings.push(aiNotes.meta.warning);
     }
-    uiState.aiStatus = {
-      loading: false,
-      phase: "guildmaster_note",
-      provider: aiNotes.meta.provider,
-      warning: warnings[0],
-    };
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "guildmaster_note AI 接続に失敗しました。");
-    uiState.aiStatus = {
-      loading: false,
-      phase: "guildmaster_note",
-      provider: "fallback",
-      warning: warnings[0],
-    };
   }
 
-  uiState.preparedCycle = {
+  return {
     mission,
     dispatch,
     report,
@@ -488,9 +475,92 @@ async function prepareCycle(): Promise<void> {
     note_candidates: noteCandidates,
     characters_after_report: charactersAfterReport,
   };
+}
+
+async function prepareCycle(): Promise<void> {
+  const mission = getSelectedMission();
+  if (!mission) return;
+  if (uiState.selectedCharacterIds.length === 0) {
+    window.alert("まず何人かに声をかけてください。");
+    return;
+  }
+
+  uiState.aiStatus = {
+    loading: true,
+    phase: "report",
+  };
+  render();
+
+  try {
+    uiState.preparedCycle = await buildPreparedCycle({
+      mission,
+      selectedCharacterIds: uiState.selectedCharacterIds,
+    });
+    uiState.aiStatus = {
+      loading: false,
+      phase: "guildmaster_note",
+      provider: "codex_cli",
+    };
+  } catch (error) {
+    uiState.aiStatus = {
+      loading: false,
+      phase: "guildmaster_note",
+      provider: "fallback",
+      warning: error instanceof Error ? error.message : "出発準備に失敗しました。",
+    };
+    render();
+    return;
+  }
   uiState.selectedNotes = Object.fromEntries(
-    noteCandidates.map((set) => [set.note_candidate_set_id, set.candidates[0]?.candidate_id ?? ""])
+    uiState.preparedCycle.note_candidates.map((set) => [set.note_candidate_set_id, set.candidates[0]?.candidate_id ?? ""])
   );
+  uiState.scene = "aftermath";
+  render();
+}
+
+async function launchAssignmentOption(optionId: string): Promise<void> {
+  const mission = getSelectedMission();
+  const advisor = getAdvisor();
+  if (!mission) return;
+
+  const option = buildAssignmentOptions(mission, advisor).find((entry) => entry.option_id === optionId);
+  if (!option) return;
+
+  uiState.selectedAssignmentOptionId = optionId;
+  uiState.selectedCharacterIds = option.character_ids;
+  uiState.castingIntent = option.intent;
+  uiState.aiStatus = {
+    loading: true,
+    phase: "report",
+    warning: "この振り分けで出した後の記録をまとめています。",
+  };
+  render();
+
+  const cacheKey = getPreparedCycleKey(mission, option.option_id);
+  const cached = uiState.preparedCycleCache[cacheKey];
+  const preparedCycle =
+    cached ??
+    (await ensurePreparedCycle({
+      mission,
+      option,
+    }));
+
+  if (!preparedCycle) {
+    uiState.aiStatus = {
+      loading: false,
+      phase: "report",
+      provider: "fallback",
+      warning: "この振り分けの準備に失敗しました。少し置いてからもう一度試してください。",
+    };
+    render();
+    return;
+  }
+
+  uiState.preparedCycle = preparedCycle;
+  uiState.selectedNotes = Object.fromEntries(
+    preparedCycle.note_candidates.map((set) => [set.note_candidate_set_id, set.candidates[0]?.candidate_id ?? ""])
+  );
+  uiState.aiStatus = undefined;
   uiState.scene = "aftermath";
   render();
 }
@@ -559,17 +629,20 @@ function confirmCycle(): void {
   uiState.selectedNotes = {};
   uiState.userNotes = {};
   uiState.selectedCharacterIds = [];
+  uiState.selectedAssignmentOptionId = null;
   uiState.briefingIntent = "";
   uiState.castingIntent = "";
   uiState.selectedMissionId = getOpenMissions()[0]?.mission_id ?? null;
   uiState.scene = "briefing";
   uiState.briefingStep = "morning";
   uiState.aiStatus = undefined;
+  uiState.preparedCycleCache = {};
+  uiState.preparedCycleLoadingKeys = [];
   render();
 }
 
 function getBriefingSceneKey(mission: Mission): string {
-  return `briefing:${uiState.briefingStep}:${mission.mission_id}:${uiState.briefingIntent.trim()}`;
+  return `briefing:${uiState.briefingStep}:${mission.mission_id}`;
 }
 
 function getCastingSceneKey(mission: Mission): string {
@@ -581,8 +654,16 @@ function getAftermathSceneKey(preparedCycle: PreparedCycle): string {
   return `aftermath:${preparedCycle.report.report_id}`;
 }
 
+function getPreparedCycleKey(mission: Mission, optionId: string): string {
+  return `prepared:${mission.mission_id}:${optionId}`;
+}
+
 function isSceneLoading(key: string): boolean {
   return uiState.sceneTextLoadingKeys.includes(key);
+}
+
+function isPreparedCycleLoading(key: string): boolean {
+  return uiState.preparedCycleLoadingKeys.includes(key);
 }
 
 function getCachedScenePack(key: string): SceneTextPack | undefined {
@@ -608,6 +689,36 @@ async function ensureSceneText(input: { key: string; request: SceneGenerationReq
       error instanceof Error ? error.message : "scene AI 接続に失敗しました。";
   } finally {
     uiState.sceneTextLoadingKeys = uiState.sceneTextLoadingKeys.filter((key) => key !== input.key);
+    render();
+  }
+}
+
+async function ensurePreparedCycle(input: {
+  mission: Mission;
+  option: AssignmentOption;
+}): Promise<PreparedCycle | undefined> {
+  const cacheKey = getPreparedCycleKey(input.mission, input.option.option_id);
+  if (uiState.preparedCycleCache[cacheKey]) {
+    return uiState.preparedCycleCache[cacheKey];
+  }
+  if (isPreparedCycleLoading(cacheKey)) {
+    return undefined;
+  }
+
+  uiState.preparedCycleLoadingKeys = [...uiState.preparedCycleLoadingKeys, cacheKey];
+  render();
+
+  try {
+    const preparedCycle = await buildPreparedCycle({
+      mission: input.mission,
+      selectedCharacterIds: input.option.character_ids,
+    });
+    uiState.preparedCycleCache[cacheKey] = preparedCycle;
+    return preparedCycle;
+  } catch {
+    return undefined;
+  } finally {
+    uiState.preparedCycleLoadingKeys = uiState.preparedCycleLoadingKeys.filter((key) => key !== cacheKey);
     render();
   }
 }
@@ -740,6 +851,79 @@ function getClaimCharacterForMission(mission: Mission): Character {
   return featured[0] ?? getAvailableCharacters()[0] ?? uiState.state.characters[0];
 }
 
+function pickCharactersForRoles(
+  roles: Character["role"][],
+  limit: number,
+  excluded: Character["character_id"][] = []
+): Character["character_id"][] {
+  const available = getAvailableCharacters().filter((character) => !excluded.includes(character.character_id));
+  const picked: Character["character_id"][] = [];
+
+  for (const role of roles) {
+    const match = available.find(
+      (character) => character.role === role && !picked.includes(character.character_id)
+    );
+    if (match) {
+      picked.push(match.character_id);
+    }
+  }
+
+  for (const character of available) {
+    if (picked.length >= limit) {
+      break;
+    }
+    if (!picked.includes(character.character_id)) {
+      picked.push(character.character_id);
+    }
+  }
+
+  return picked.slice(0, limit);
+}
+
+function buildAssignmentOptions(mission: Mission, advisor: StaffCharacter | null): AssignmentOption[] {
+  const limit = mission.participants?.max_party_size ?? 3;
+  const recommended = mission.participants?.recommended_roles ?? [];
+  const primary = pickCharactersForRoles(recommended, limit);
+  const reverse = pickCharactersForRoles([...recommended].reverse(), limit);
+  const pressure = pickCharactersForRoles(["frontliner", "negotiator", "engineer", "scout", "support"], limit);
+  const careful = pickCharactersForRoles(["scout", "support", "engineer", "negotiator", "frontliner"], limit);
+
+  return [
+    {
+      option_id: "steady",
+      label: "堅実に回す",
+      summary: "相性と役割を素直に見て、無理の少ない顔ぶれで回す。",
+      staff_note: advisor ? `${advisor.name}はこの案なら大崩れしにくいと見ている。` : "無難に通すならこの筋だ。",
+      character_ids: primary,
+      intent: "無理を押さず、役割が噛み合う顔ぶれで進めたい。",
+    },
+    {
+      option_id: "fast",
+      label: "速さを優先する",
+      summary: "多少荒くても手の早い面子で押し込み、仕事を先に終わらせに行く。",
+      staff_note: advisor ? `${advisor.name}は急ぎ筋だと認めるが、あとで誰かが疲れると見ている。` : "短く終わるか、短く燃えるかの二択だ。",
+      character_ids: pressure,
+      intent: "多少荒くても、先に動いて主導権を取りたい。",
+    },
+    {
+      option_id: "careful",
+      label: "退路を厚くする",
+      summary: "危ない時に引ける形を優先し、慎重な組み方で事故を減らす。",
+      staff_note: advisor ? `${advisor.name}はこの案なら取り返しのつかない崩れ方は避けやすいと見ている。` : "派手さはないが、帰ってくる確率は上がる。",
+      character_ids: careful,
+      intent: "派手さより、引き際と退路を優先したい。",
+    },
+    {
+      option_id: "strained",
+      label: "噛み合わせを賭ける",
+      summary: "少し不安はあるが、今の流れに乗せるならこの顔ぶれだと賭ける。",
+      staff_note: advisor ? `${advisor.name}は止めはしないが、あとで空気が荒れる可能性は見ている。` : "通れば大きいが、後味は読みにくい。",
+      character_ids: reverse,
+      intent: "多少の相性不安は飲んで、今いちばん仕事を動かせる面子に賭けたい。",
+    },
+  ];
+}
+
 function getBriefingCharacterLine(character: Character, mission: Mission): string {
   if (character.character_id === "char_gai") {
     return mission.category === "negotiation"
@@ -870,7 +1054,8 @@ function getCastingCrossTalk(mission: Mission, selectedCharacters: Character[]):
   speaker: string;
   text: string;
 }> {
-  const lines = selectedCharacters.map((character) => ({
+  const speakers = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
+  const lines = speakers.map((character) => ({
     character_id: character.character_id,
     speaker: character.name,
     text: getSelectedCharacterBanter(character, mission),
@@ -1000,6 +1185,7 @@ function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | nu
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
+  const discussionCharacters = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
   const availableCharacters = getAvailableCharacters();
 
   return {
@@ -1017,7 +1203,7 @@ function buildCastingFallbackPack(mission: Mission, advisor: StaffCharacter | nu
     ],
     character_lines: availableCharacters.map((character) => ({
       character_id: character.character_id,
-      text: selectedCharacters.some((selected) => selected.character_id === character.character_id)
+      text: discussionCharacters.some((selected) => selected.character_id === character.character_id)
         ? getSelectedCharacterBanter(character, mission)
         : getCharacterReaction(character, mission),
     })),
@@ -1143,18 +1329,8 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
   const sceneKey = getBriefingSceneKey(mission);
   const scenePack = getCachedScenePack(sceneKey);
   const warning = uiState.sceneTextWarnings[sceneKey];
-  const heading =
-    uiState.briefingStep === "morning"
-      ? "朝の導入"
-      : uiState.briefingStep === "entry"
-        ? "依頼の入口"
-        : "受諾判断";
-  const title =
-    uiState.briefingStep === "morning"
-      ? "今日はどこから話を聞くか"
-      : uiState.briefingStep === "entry"
-        ? mission.display_name
-        : `${mission.display_name} をどう受けるか`;
+  const heading = uiState.briefingStep === "morning" ? "朝の導入" : "案件の読み合わせ";
+  const title = uiState.briefingStep === "morning" ? "届いた案件をさらう" : `${mission.display_name} を確認する`;
   const crossTalk = getBriefingCrossTalk(mission, advisor);
 
   return `
@@ -1182,22 +1358,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
             </div>`
       }
       ${scenePack ? renderCharacterDialogueBlock(scenePack.character_lines) : ""}
-      ${
-        uiState.briefingStep !== "morning"
-          ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>`
-          : ""
-      }
-      ${
-        uiState.briefingStep === "decision"
-          ? `
-            <section class="intent-panel">
-              <div class="scene-note strong">主の返し方メモ</div>
-              <p class="small muted">そのままの台詞ではなく、どう返したいかだけを書きます。</p>
-              <textarea class="textarea" data-action="briefing-intent" placeholder="例: すぐには頷かず、条件だけ先に確かめたい">${uiState.briefingIntent}</textarea>
-            </section>
-          `
-          : ""
-      }
+      ${uiState.briefingStep !== "morning" ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>` : ""}
       ${renderSceneLoadingNote(sceneKey)}
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
@@ -1210,6 +1371,7 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
   const selectedCharacters = getAvailableCharacters().filter((character) =>
     uiState.selectedCharacterIds.includes(character.character_id)
   );
+  const discussionCharacters = selectedCharacters.length > 0 ? selectedCharacters : getFeaturedCharactersForMission(mission, 3);
   const warning = uiState.sceneTextWarnings[sceneKey];
   const crossTalk = getCastingCrossTalk(mission, selectedCharacters);
 
@@ -1240,7 +1402,7 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
       ${
         scenePack
           ? renderCharacterDialogueBlock(
-              scenePack.character_lines.filter((line) => selectedCharacters.some((character) => character.character_id === line.character_id))
+              scenePack.character_lines.filter((line) => discussionCharacters.some((character) => character.character_id === line.character_id))
             )
           : ""
       }
@@ -1320,6 +1482,43 @@ function renderRoster(mission: Mission): string {
       `;
     })
     .join("");
+}
+
+function renderAssignmentOptions(mission: Mission, advisor: StaffCharacter | null): string {
+  const options = buildAssignmentOptions(mission, advisor);
+
+  return `
+    <section class="roster-panel">
+      <div class="scene-label">振り分け候補</div>
+      <div class="choice-stack">
+        ${options
+          .map((option) => {
+            const cacheKey = getPreparedCycleKey(mission, option.option_id);
+            const loading = isPreparedCycleLoading(cacheKey);
+            const ready = Boolean(uiState.preparedCycleCache[cacheKey]);
+            return `
+              <button
+                class="choice-card option-card ${uiState.selectedAssignmentOptionId === option.option_id ? "selected" : ""}"
+                data-action="launch-option"
+                data-option-id="${option.option_id}"
+                ${uiState.aiStatus?.loading ? "disabled" : ""}
+              >
+                <div class="choice-head">
+                  <strong>${option.label}</strong>
+                  <span class="tag">${option.character_ids.map((id) => getCharacterName(id)).join(" / ")}</span>
+                </div>
+                <p>${option.summary}</p>
+                <p class="small muted">${option.staff_note}</p>
+                <p class="small muted">
+                  ${loading ? "この案の後続文を先読み中。" : ready ? "この案の後続文は準備済み。" : "この案はまだ未準備。"}
+                </p>
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
 }
 
 function renderNoteSelection(preparedCycle: PreparedCycle): string {
@@ -1419,28 +1618,18 @@ function renderActions(mission: Mission | null): string {
     if (uiState.briefingStep === "morning") {
       return `
         <div class="action-row">
-          <button data-action="open-entry" ${disabled}>今日の話を聞く</button>
+          <button data-action="open-board" ${disabled}>スタッフと案件を確認する</button>
           <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
           <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
         </div>
       `;
     }
 
-    if (uiState.briefingStep === "entry") {
-      return `
-        <div class="action-row">
-          <button data-action="open-decision" ${disabled}>返事の段取りを決める</button>
-          <button class="secondary" data-action="back-to-morning" ${disabled}>朝の導入へ戻る</button>
-          <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
-        </div>
-      `;
-    }
-
     return `
       <div class="action-row">
-        <button data-action="enter-casting" ${disabled}>この件を受ける方向で進める</button>
-        <button class="secondary" data-action="back-to-entry" ${disabled}>もう少し話を聞く</button>
-        <button class="secondary" data-action="next-mission" ${disabled}>いったん保留して別の案件を見る</button>
+        <button data-action="enter-casting" ${disabled}>掲示板に張り出す</button>
+        <button class="secondary" data-action="back-to-morning" ${disabled}>朝の読み合わせに戻る</button>
+        <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
       </div>
     `;
   }
@@ -1448,8 +1637,7 @@ function renderActions(mission: Mission | null): string {
   if (uiState.scene === "casting") {
     return `
       <div class="action-row">
-        <button data-action="prepare-cycle" ${disabled}>この顔ぶれで送り出す</button>
-        <button class="secondary" data-action="back-to-briefing" ${disabled}>机に戻る</button>
+        <button class="secondary" data-action="back-to-briefing" ${disabled}>掲示板の前に戻る</button>
         <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
       </div>
     `;
@@ -1484,12 +1672,7 @@ function renderMainStage(): string {
   if (uiState.scene === "casting") {
     return `
       ${renderCastingScene(mission, advisor)}
-      <section class="roster-panel">
-        <div class="scene-label">誰に声をかけるか</div>
-        <div class="choice-stack">
-          ${renderRoster(mission)}
-        </div>
-      </section>
+      ${renderAssignmentOptions(mission, advisor)}
     `;
   }
 
@@ -1515,12 +1698,7 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
   }
 
   if (uiState.scene === "briefing") {
-    const fallback =
-      uiState.briefingStep === "morning"
-        ? buildMorningFallbackPack(mission, advisor)
-        : uiState.briefingStep === "entry"
-          ? buildEntryFallbackPack(mission, advisor)
-          : buildDecisionFallbackPack(mission, advisor);
+    const fallback = uiState.briefingStep === "morning" ? buildMorningFallbackPack(mission, advisor) : buildEntryFallbackPack(mission, advisor);
     return {
       key: getBriefingSceneKey(mission),
       request: {
@@ -1538,7 +1716,6 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
         characters: [],
         reward_text: getRewardText(mission),
         risk_text: getRiskText(mission),
-        player_intent: uiState.briefingStep === "decision" ? uiState.briefingIntent.trim() : undefined,
         recent_notes: getRecentNotes(2),
         recent_reports: getRecentReports(2).map((report) => report.text),
         fallback,
@@ -1614,6 +1791,70 @@ function buildSceneRequestForCurrentView(): { key: string; request: SceneGenerat
   return null;
 }
 
+function buildScenePrefetchRequests(): Array<{ key: string; request: SceneGenerationRequest }> {
+  const mission = getSelectedMission();
+  const advisor = getAdvisor();
+  if (!mission) {
+    return [];
+  }
+
+  if (uiState.scene === "briefing" && uiState.briefingStep === "morning") {
+    return [
+      {
+        key: `briefing:board:${mission.mission_id}`,
+        request: {
+          stage: "briefing",
+          scene_variant: "board",
+          mission,
+          advisor: advisor
+            ? {
+                character_id: advisor.character_id,
+                name: advisor.name,
+                public_digest: advisor.public_digest,
+                volatile_hook: advisor.volatile_hook,
+              }
+            : null,
+          characters: [],
+          reward_text: getRewardText(mission),
+          risk_text: getRiskText(mission),
+          recent_notes: getRecentNotes(2),
+          recent_reports: getRecentReports(2).map((report) => report.text),
+          fallback: buildEntryFallbackPack(mission, advisor),
+        },
+      },
+      {
+        key: getCastingSceneKey(mission),
+        request: {
+          stage: "casting",
+          scene_variant: "assignment_consultation",
+          mission,
+          advisor: advisor
+            ? {
+                character_id: advisor.character_id,
+                name: advisor.name,
+                public_digest: advisor.public_digest,
+                volatile_hook: advisor.volatile_hook,
+              }
+            : null,
+          characters: getAvailableCharacters().map((character) => ({
+            character_id: character.character_id,
+            name: character.name,
+            role: character.role,
+            public_digest: character.public_digest,
+            volatile_hook: character.volatile_hook,
+            condition_text: getConditionText(character),
+          })),
+          reward_text: getRewardText(mission),
+          risk_text: getRiskText(mission),
+          fallback: buildCastingFallbackPack(mission, advisor),
+        },
+      },
+    ];
+  }
+
+  return [];
+}
+
 function render(): void {
   const mission = getSelectedMission();
 
@@ -1653,10 +1894,8 @@ function render(): void {
     </div>
   `;
 
-  appRoot.querySelector("[data-action='open-entry']")?.addEventListener("click", () => enterBriefingStep("entry"));
-  appRoot.querySelector("[data-action='open-decision']")?.addEventListener("click", () => enterBriefingStep("decision"));
+  appRoot.querySelector("[data-action='open-board']")?.addEventListener("click", () => enterBriefingStep("board"));
   appRoot.querySelector("[data-action='back-to-morning']")?.addEventListener("click", () => enterBriefingStep("morning"));
-  appRoot.querySelector("[data-action='back-to-entry']")?.addEventListener("click", () => enterBriefingStep("entry"));
   appRoot.querySelector("[data-action='enter-casting']")?.addEventListener("click", enterCasting);
   appRoot.querySelector("[data-action='back-to-briefing']")?.addEventListener("click", returnToBriefing);
   appRoot.querySelector("[data-action='back-to-casting']")?.addEventListener("click", () => {
@@ -1667,7 +1906,11 @@ function render(): void {
   appRoot.querySelectorAll<HTMLElement>("[data-action='select-mission']").forEach((button) => {
     button.addEventListener("click", () => selectMission(button.dataset.missionId as Mission["mission_id"]));
   });
-  appRoot.querySelector("[data-action='prepare-cycle']")?.addEventListener("click", prepareCycle);
+  appRoot.querySelectorAll<HTMLElement>("[data-action='launch-option']").forEach((button) => {
+    button.addEventListener("click", () => {
+      void launchAssignmentOption(button.dataset.optionId ?? "");
+    });
+  });
   appRoot.querySelector("[data-action='confirm-cycle']")?.addEventListener("click", confirmCycle);
   appRoot.querySelector("[data-action='reset-game']")?.addEventListener("click", resetGame);
   appRoot.querySelector("[data-action='clear-ai-cache']")?.addEventListener("click", () => {
@@ -1675,15 +1918,6 @@ function render(): void {
   });
   appRoot.querySelector("[data-action='full-reset']")?.addEventListener("click", () => {
     void fullReset();
-  });
-  appRoot.querySelector<HTMLTextAreaElement>("[data-action='briefing-intent']")?.addEventListener("input", (event) => {
-    const target = event.currentTarget as HTMLTextAreaElement | null;
-    if (!target) return;
-    uiState.briefingIntent = target.value;
-    if (mission) {
-      delete uiState.sceneTextCache[getBriefingSceneKey(mission)];
-      delete uiState.sceneTextWarnings[getBriefingSceneKey(mission)];
-    }
   });
   appRoot.querySelector<HTMLTextAreaElement>("[data-action='casting-intent']")?.addEventListener("input", (event) => {
     const target = event.currentTarget as HTMLTextAreaElement | null;
@@ -1712,6 +1946,20 @@ function render(): void {
   const sceneRequest = buildSceneRequestForCurrentView();
   if (sceneRequest) {
     void ensureSceneText(sceneRequest);
+  }
+
+  for (const request of buildScenePrefetchRequests()) {
+    void ensureSceneText(request);
+  }
+
+  if (uiState.scene === "casting" && mission) {
+    const advisor = getAdvisor();
+    for (const option of buildAssignmentOptions(mission, advisor)) {
+      void ensurePreparedCycle({
+        mission,
+        option,
+      });
+    }
   }
 }
 
