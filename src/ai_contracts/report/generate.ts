@@ -79,6 +79,7 @@ ${buildSharedStylePrompt()}
 - その上で現場の空気や後味を少しだけ残してください
 - 必須項目 text / intent_tags / reason_summary は必ず埋めてください
 - 少し人間味があってもよいですが、冗談に寄せすぎないでください
+- 報告書の体裁を保ちながらも、文章として自然につながるようにしてください
 
 入力:
 ${JSON.stringify(input, null, 2)}
@@ -87,10 +88,11 @@ ${JSON.stringify(input, null, 2)}
 ${JSON.stringify(fallback, null, 2)}
 
 制約:
-- text は2〜4文
+- text は3〜6文
 - summary_lines は最大3行
 - 既にある事実関係を壊さない
 - 結果段階、損耗、対外関係、次の火種がわかる範囲で反映する
 - 読んですぐ状況がつかめる文にする
+- 文ごとに事実を切り離して箇条書き風にしない
 `.trim();
 }
