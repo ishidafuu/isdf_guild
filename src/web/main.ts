@@ -178,10 +178,11 @@ function getRewardText(mission: Mission): string {
   }
   const chunks: string[] = [];
   if (reward.currency) {
-    chunks.push(`${reward.currency}cr`);
+    const currencyLabel = uiState.state.world_pack.resource_dictionary.currency[0] ?? "貨";
+    chunks.push(`${currencyLabel}${reward.currency}`);
   }
   if (reward.reputation) {
-    chunks.push("信用の上積み");
+    chunks.push("顔つなぎ");
   }
   if (reward.resource_tags?.length) {
     chunks.push(reward.resource_tags.join(" / "));
@@ -232,6 +233,19 @@ function getConditionText(character: Character): string {
     return "返事はできる。ただ、疲れはまだ身体に残っている。";
   }
   return "表向きは静かだ。少なくとも今は、まだ切れていない。";
+}
+
+function getCurrentDecisionCue(mission: Mission): string {
+  if (uiState.scene === "briefing" && uiState.briefingStep === "morning") {
+    return "今は、届いた話のうちどれを先に詳しく聞くかを決める場面だ。";
+  }
+  if (uiState.scene === "briefing") {
+    return `今は、${mission.display_name} を掲示板に出すか、まだ保留して様子を見るかを決める場面だ。`;
+  }
+  if (uiState.scene === "casting") {
+    return "今は、誰に声をかけてどの回し方で仕事を受けるかを決める場面だ。";
+  }
+  return "今は、戻ってきた連中をどう見たかを帳面に残す場面だ。";
 }
 
 function cycleMission(direction: 1 | -1): void {
@@ -751,10 +765,10 @@ function buildMorningFallbackPack(mission: Mission, advisor: StaffCharacter | nu
 
   return {
     narration_lines: [
-      `${uiState.state.base.summary}。朝の空気はまだ重いが、机の上の端末だけは先に働き始めている。`,
+      `${uiState.state.base.summary}。朝の潮気はまだ重いが、帳場の机だけは先に忙しさへ入っている。`,
       advisor
         ? `${advisor.name}が帳面を片手に立ち、今日は一件、先に話しておきたいとだけ言う。`
-        : "通知灯が一つ点きっぱなしだ。誰かが返事を待っているらしい。",
+        : "戸口の外で誰かが待っている気配がある。返事を急いでいるらしい。",
       `今日いちばん表に出てきた話は「${mission.display_name}」だ。`,
       getMissionScaleText(mission),
     ],
@@ -777,7 +791,7 @@ function buildEntryFallbackPack(mission: Mission, advisor: StaffCharacter | null
   if (entryMode === "staff_report") {
     return {
       narration_lines: [
-        `${advisor?.name ?? "帳場"}が机に薄いファイルを置く。港湾労務連合から、返事の早い仕事が来ている。`,
+        `${advisor?.name ?? "帳場"}が机に薄い書付を置く。港運組合から、返事の早い仕事が来ている。`,
         `仕事は「${mission.display_name}」。${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}`,
         `依頼人は ${getMissionClientName(mission)}。報酬は ${getRewardText(mission)}。`,
       ],
@@ -1005,6 +1019,7 @@ function renderBriefingScene(mission: Mission, advisor: StaffCharacter | null): 
                 .join("")}
             </div>`
       }
+      <div class="scene-note strong">${getCurrentDecisionCue(mission)}</div>
       ${scenePack ? renderCharacterDialogueBlock(scenePack.character_lines) : ""}
       ${uiState.briefingStep !== "morning" ? `<p class="story-line muted-line">${typeof mission.objective === "string" ? mission.objective : mission.objective.summary}</p>` : ""}
       ${renderSceneLoadingNote(sceneKey)}
@@ -1066,6 +1081,7 @@ function renderCastingScene(mission: Mission, advisor: StaffCharacter | null): s
           ? ""
           : ""
       }
+      <div class="scene-note strong">${getCurrentDecisionCue(mission)}</div>
       ${warning ? `<div class="small muted">${warning}</div>` : ""}
     </div>
   `;
@@ -1090,6 +1106,7 @@ function renderAftermathScene(preparedCycle: PreparedCycle, advisor: StaffCharac
           .map((line) => renderDialogueLine(line.speaker, line.text, getSpeakerClass(line.character_id)))
           .join("")}
       </div>
+      <div class="scene-note strong">${getCurrentDecisionCue(preparedCycle.mission)}</div>
       ${renderCharacterDialogueBlock(
         returningCharacters.map((character) => ({
           character_id: character.character_id,
@@ -1195,7 +1212,7 @@ function renderSidebar(mission: Mission | null, advisor: StaffCharacter | null):
     <aside class="sidebar ledger-rail">
       <section class="sidebar-panel rail-panel">
         <div class="scene-label">帳場</div>
-        <h3>${advisor?.name ?? "記録端末"}</h3>
+        <h3>${advisor?.name ?? "帳場"}</h3>
         <p>${advisor?.public_digest ?? "今日は人の気配が薄い。"}</p>
         ${
           advisor
@@ -1250,7 +1267,7 @@ function renderActions(mission: Mission | null): string {
     if (uiState.briefingStep === "morning") {
       return `
         <div class="action-row">
-          <button data-action="open-board" ${disabled}>スタッフと案件を確認する</button>
+          <button data-action="open-board" ${disabled}>この案件の話を詳しく聞く</button>
           <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
           <button class="secondary" data-action="reset-game" ${disabled}>リセット</button>
         </div>
@@ -1259,8 +1276,8 @@ function renderActions(mission: Mission | null): string {
 
     return `
       <div class="action-row">
-        <button data-action="enter-casting" ${disabled}>掲示板に張り出す</button>
-        <button class="secondary" data-action="back-to-morning" ${disabled}>朝の読み合わせに戻る</button>
+        <button data-action="enter-casting" ${disabled}>この案件を掲示板に出す</button>
+        <button class="secondary" data-action="back-to-morning" ${disabled}>ほかの持ち込み話へ戻る</button>
         <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
       </div>
     `;
@@ -1269,7 +1286,7 @@ function renderActions(mission: Mission | null): string {
   if (uiState.scene === "casting") {
     return `
       <div class="action-row">
-        <button class="secondary" data-action="back-to-briefing" ${disabled}>掲示板の前に戻る</button>
+        <button class="secondary" data-action="back-to-briefing" ${disabled}>まだ掲示板に出さない</button>
         <button class="secondary" data-action="next-mission" ${disabled}>別の案件を聞く</button>
       </div>
     `;
@@ -1494,7 +1511,7 @@ function render(): void {
     <div class="novel-shell">
       <header class="topbar">
         <div>
-          <div class="eyebrow">INTERACTIVE LOG</div>
+          <div class="eyebrow">GUILD LEDGER</div>
           <h1>${uiState.state.world_pack.name}</h1>
           <p>${uiState.state.world_pack.one_liner}</p>
         </div>

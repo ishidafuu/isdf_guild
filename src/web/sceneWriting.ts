@@ -15,22 +15,22 @@ type PreparedCycleLike = {
 
 export function getMissionLead(mission: Mission): string {
   if (mission.category === "delivery") {
-    return "夜明け前までに荷を通す仕事。派手じゃないけど、止まると一気に面倒になる。";
+    return "夜明け前までに荷を通す仕事。派手ではないが、止まると町じゅうに文句が回る。";
   }
   if (mission.category === "negotiation") {
-    return "揉めてる連中をなだめる仕事。誰を前に出すかで、話が早く済むか長引くかが変わる。";
+    return "揉めている連中をなだめる仕事。誰を前に出すかで、話の収まり方が変わる。";
   }
-  return "企業区画でログを抜く仕事。うまくやっても、だいたい何かしら面倒は残る。";
+  return "人目を避けて荷札や証拠を取り戻す仕事。うまくやっても、誰かの顔色は悪くなる。";
 }
 
 export function getMissionShadow(mission: Mission): string {
   if (mission.category === "delivery") {
-    return "締切が短い。もたつくほど検問が増えて笑えなくなる。";
+    return "締切が短い。もたつくほど見回りが増えて笑えなくなる。";
   }
   if (mission.category === "negotiation") {
     return "片方の顔を立てすぎると、もう片方があとでへそを曲げる。";
   }
-  return "依頼人も全部は話していない。報酬だけ見て飛びつくと、あとで嫌な顔をすることになる。";
+  return "依頼人も全部は話していない。手間賃だけ見て飛びつくと、あとで嫌な顔を見る。";
 }
 
 export function getMissionEntryMode(mission: Mission): "staff_report" | "adventurer_pitch" | "client_visit" {
@@ -86,13 +86,13 @@ export function getCharacterReaction(character: Character, mission: Mission): st
       return "短くうなずく。危ない運びでも、前に立つ役なら自分だと思っている顔だ。";
     }
     if (mission.category === "recovery") {
-      return "表情は薄いが、企業区画と聞いた時だけ少しだけ目つきが固くなる。";
+      return "表情は薄いが、北湾商会の倉庫絡みだと聞いた時だけ少し目つきが固くなる。";
     }
     return "相変わらず口数は少ない。ただ、断る時の空気ではない。";
   }
   if (character.character_id === "char_mina") {
     if (mission.category === "recovery") {
-      return "端末を閉じる指先が少し強い。企業絡みだと、だいたい機嫌がよくない。";
+      return "帳面を閉じる指先が少し強い。大商会絡みだと、だいたい機嫌がよくない。";
     }
     if (mission.category === "delivery") {
       return "荷より先に経路の雑さを気にしている。受けるなら準備はちゃんとやりたいらしい。";
@@ -125,7 +125,7 @@ export function getBriefingCharacterLine(character: Character, mission: Mission)
   }
   if (character.character_id === "char_mina") {
     return mission.category === "recovery"
-      ? "端末から目を上げる。『企業絡みなら、雑な説明を真に受けない方がいい』"
+      ? "帳面から目を上げる。『商会絡みなら、雑な説明を真に受けない方がいい』"
       : "資料を見て眉をひそめる。『準備不足で押すなら、誰かが後で泣く』";
   }
   if (character.character_id === "char_shion") {
@@ -145,7 +145,7 @@ export function getSelectedCharacterBanter(character: Character, mission: Missio
   }
   if (character.character_id === "char_mina") {
     return mission.category === "recovery"
-      ? "端末を叩きながら言う。『抜くなら抜くでいい。雑に入るなら私は行かない』"
+      ? "帳面を指で叩きながら言う。『抜くなら抜くでいい。雑に入るなら私は行かない』"
       : "肩越しに言葉を投げる。『準備に時間をくれるなら動ける。根性論なら却下』";
   }
   if (character.character_id === "char_gai") {
@@ -166,7 +166,7 @@ export function getAftermathCharacterBanter(character: Character, result: string
   if (character.character_id === "char_mina") {
     return result === "failure"
       ? "額を押さえる。『言った通り、雑に入るとこうなる』"
-      : "端末を閉じる。『終わった。気持ちよくはないけど、終わっただけ上等』";
+      : "帳面を閉じる。『終わった。気持ちよくはないけど、終わっただけ上等』";
   }
   if (character.character_id === "char_shion") {
     return result === "failure"
