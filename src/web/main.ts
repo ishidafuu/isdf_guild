@@ -925,7 +925,6 @@ function renderSceneLoadingNote(sceneKey: string): string {
   return `
     <div class="scene-note loading-note">
       <strong>AI文章を生成中です。</strong>
-      <div class="small muted">いま表示している文は仮の文面です。でき次第、この場面の文章を差し替えます。</div>
     </div>
   `;
 }
